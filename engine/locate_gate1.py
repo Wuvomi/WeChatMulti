@@ -57,6 +57,18 @@ def cbz_to_b(word):
     b_word = (0b000101 << 26) | imm26
     return b_word & 0xFFFFFFFF
 
+def is_b(word):
+    # 无条件 B: bits[31:26] == 0b000101
+    return (word >> 26) == 0b000101
+
+def b_to_cbz_w0(word):
+    # 已 patch 状态:从无条件 b 反推原 cbz w0(同样位移,转回 imm19)。
+    imm26 = word & 0x3FFFFFF
+    if imm26 & (1 << 25):
+        imm26 -= (1 << 26)  # sign extend
+    imm19 = imm26 & 0x7FFFF
+    return (0x34 << 24) | (imm19 << 5)  # cbz w0(Rt=0)
+
 def main():
     if len(sys.argv) < 2:
         print("usage: locate_gate1.py <loader_path>", file=sys.stderr); sys.exit(2)
@@ -68,7 +80,7 @@ def main():
         blob = f.read()
 
     SIG = bytes.fromhex("e07300b9")  # str w0, [sp, #0x70]
-    hits = []
+    cbz_hits, b_hits = [], []
     i = 0
     while True:
         j = blob.find(SIG, i)
@@ -78,24 +90,32 @@ def main():
         if len(nxt) == 4:
             word = struct.unpack("<I", nxt)[0]
             if is_cbz_w0(word):
-                hits.append((j+4, word))  # j+4 = cbz 在 slice 内的偏移
+                cbz_hits.append((j+4, word))   # 干净(未patch)
+            elif is_b(word):
+                b_hits.append((j+4, word))     # 已patch(cbz 已被改成 b)
         i = j + 4
 
-    if not hits:
+    # 优先未patch的 cbz(全新安装);没有则取已patch的 b(重装幂等)。
+    if cbz_hits:
+        slice_off, word = cbz_hits[0]
+        orig, patched = word, cbz_to_b(word)
+        if len(cbz_hits) > 1:
+            print("WARN: cbz 命中 %d 处,取第一处" % len(cbz_hits), file=sys.stderr)
+    elif b_hits:
+        slice_off, word = b_hits[0]
+        orig, patched = b_to_cbz_w0(word), word   # 已patch:当前即patch,反推原cbz
+        print("INFO: 门①已是 patched 状态(b),重装将跳过 patch", file=sys.stderr)
+    else:
         print("NO_MATCH", file=sys.stderr); sys.exit(1)
-    if len(hits) > 1:
-        print("WARN: 特征码命中 %d 处,取第一处" % len(hits), file=sys.stderr)
-    slice_off, word = hits[0]
     fat_off = arm + slice_off
-    patched = cbz_to_b(word)
 
     print("ARM64_SLICE_OFF=%d" % arm)
     print("GATE1_SLICE_OFF=0x%x" % slice_off)
     print("GATE1_FAT_OFF=0x%x" % fat_off)
-    print("GATE1_ORIG=%08x" % word)
+    print("GATE1_ORIG=%08x" % orig)
     print("GATE1_PATCH=%08x" % patched)
     # 也给小端字节串,便于直接写盘
-    print("GATE1_ORIG_LE=%s" % struct.pack("<I", word).hex())
+    print("GATE1_ORIG_LE=%s" % struct.pack("<I", orig).hex())
     print("GATE1_PATCH_LE=%s" % struct.pack("<I", patched).hex())
 
 if __name__ == "__main__":
