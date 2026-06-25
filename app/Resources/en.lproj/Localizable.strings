@@ -51,6 +51,7 @@
 /* Main window — menu-bar checkbox & install button */
 "在顶部菜单栏显示图标" = "Show icon in the menu bar";
 "处理中…" = "Working…";
+"正在安装…" = "Installing…";
 "下载并替换为兼容版微信" = "Download & Replace with a Compatible WeChat";
 "重新安装双开插件" = "Reinstall Multi-instance Plugin";
 "安装双开插件" = "Install Multi-instance Plugin";

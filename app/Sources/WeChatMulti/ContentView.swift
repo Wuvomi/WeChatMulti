@@ -192,7 +192,7 @@ struct ContentView: View {
         model.installing || model.needsDownload || model.engineOutdated || !model.multiOpenActive
     }
     private var buttonLabel: String {
-        if model.installing { return String(localized: "处理中…") }
+        if model.installing { return String(localized: "正在安装…") }
         if model.needsDownload { return String(localized: "下载并替换为兼容版微信") }
         if model.engineOutdated { return String(localized: "更新双开引擎") }
         return String(localized: "安装双开引擎")   // 未装任何方案

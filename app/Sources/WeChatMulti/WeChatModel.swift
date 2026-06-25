@@ -162,10 +162,15 @@ final class WeChatModel: ObservableObject {
 
     /// 已装引擎写在 perms.json 里的版本(旧引擎无此字段 → nil)。
     @Published var installedEngineVersion: String?
+    private var permsUpdated: TimeInterval?   // perms.json 的 updated 时间戳；判断数据是否"新鲜"(微信正带引擎在跑)
     /// 引擎过时:已装自研引擎,但其版本缺失或低于当前 → 需更新(GUI 显"引擎需更新"+引导重装)。
     var engineOutdated: Bool {
         guard ourEngineInstalled, permsReadable else { return false }  // perms 没读到=未知,不误判
-        guard let v = installedEngineVersion else { return true }       // perms 有但无 engine 字段=旧引擎
+        // perms.json 必须"新鲜"(微信正带引擎在跑、近 3 分钟内写过)才据此判过时。
+        // 否则(微信没跑/刚装完已退出)读到的是上个引擎的旧 perms，会误报"引擎需更新"。
+        guard let upd = permsUpdated,
+              Date().timeIntervalSince1970 - upd < 180 else { return false }
+        guard let v = installedEngineVersion else { return true }       // 新鲜数据里无 engine 字段=旧引擎
         return v.compare(selfEngineVersion, options: .numeric) == .orderedAscending
     }
 
@@ -499,11 +504,12 @@ final class WeChatModel: ObservableObject {
         guard ourEngineInstalled,
               let data = FileManager.default.contents(atPath: permsJSONPath),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { permsReadable = false; fdaOK = false; screenOK = false; installedEngineVersion = nil; return }
+        else { permsReadable = false; fdaOK = false; screenOK = false; installedEngineVersion = nil; permsUpdated = nil; return }
         permsReadable = true
         fdaOK = (obj["fda"] as? Bool) ?? false
         screenOK = (obj["screen"] as? Bool) ?? false
         installedEngineVersion = obj["engine"] as? String   // 旧引擎无此字段 → nil → 判过时
+        permsUpdated = obj["updated"] as? TimeInterval       // 数据新鲜度
     }
 
     private func readVersion() {
