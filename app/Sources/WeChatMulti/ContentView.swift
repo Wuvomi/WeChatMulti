@@ -62,17 +62,6 @@ struct ContentView: View {
                     minHeight: 30))
                 .disabled(model.installing)
             }
-
-            // 已装 X1a0He → 保持显示/行为不变，仅给一个独立的次级入口"改用自研引擎（实验）"。
-            // 不会自动替换；点了才施工，措辞标明实验、是用户主动选择。
-            if model.activeEngine == .x1a0he && !model.needsDownload {
-                Button(String(localized: "改用自研引擎（实验）")) {
-                    model.switchToSelfEngine()
-                }
-                .buttonStyle(.link)
-                .controlSize(.small)
-                .disabled(model.installing)
-            }
         }
         .padding(12)
         .alert("下载并替换微信", isPresented: Binding(
@@ -131,17 +120,18 @@ struct ContentView: View {
         }
     }
 
-    // "双开插件状态"行：终极兜底模式=红"未生效（BundleID 临时方案）"；否则按注入引擎红/绿。
+    // "双开插件状态"行：终极兜底=红"未生效（BundleID 临时方案）"；自研引擎不带"方案"二字；其它带。
     @ViewBuilder private var statusRow: some View {
         if model.cloneMode {
             dot(String(localized: "双开插件状态"),
                 String(localized: "未生效（BundleID 临时方案）"), ok: false)
+        } else if !model.multiOpenActive {
+            dot(String(localized: "双开插件状态"), String(localized: "不可用"), ok: false)
+        } else if model.activeEngine == .ourOwn {
+            dot(String(localized: "双开插件状态"), String(localized: "已可用（自研引擎）"), ok: true)
         } else {
             dot(String(localized: "双开插件状态"),
-                model.multiOpenActive
-                  ? String(localized: "已可用（\(model.engineName) 方案）")
-                  : String(localized: "不可用"),
-                ok: model.multiOpenActive)
+                String(localized: "已可用（\(model.engineName) 方案）"), ok: true)
         }
     }
 
@@ -196,20 +186,20 @@ struct ContentView: View {
         }
     }
 
-    // 全盘访问：已授权显绿(与值同列)；否则「去设置」按钮贴右
+    // 全盘访问行：探针检测到未授权 → 标红「权限未设置」(与双开状态绿色相反) + 去设置；
+    // 检测不到(没装探针/没跑过)→ 灰底引导。已授权时整行由外层条件隐藏，不在此渲染。
     private func fdaRow() -> some View {
         HStack(spacing: 6) {
             Text("全盘访问权限").font(.callout).foregroundStyle(.secondary)
                 .frame(width: labelW, alignment: .leading)
-            if model.permsReadable && model.fdaOK {
-                dotSlot(.green)
-                Text("已授权").font(.callout).foregroundStyle(Color.green)
-                Spacer()
+            if model.permsReadable && !model.fdaOK {
+                dotSlot(.red)
+                Text("权限未设置").font(.callout).foregroundStyle(Color.red)
             } else {
                 dotSlot(nil)
-                Spacer()
-                Button("去设置") { model.openFullDiskAccessSettings() }.controlSize(.small)
             }
+            Spacer()
+            Button("去设置") { model.openFullDiskAccessSettings() }.controlSize(.small)
         }
     }
 }

@@ -21,6 +21,7 @@
 "已可用（%@ 方案）" = "Ready (%@)";
 "不可用" = "Unavailable";
 "未生效（BundleID 临时方案）" = "Off (BundleID fallback)";
+"已可用（自研引擎）" = "Ready (Self-built)";
 "双开插件版本" = "Plugin version";
 "未安装" = "Not installed";
 "自研引擎" = "Self-built";
@@ -28,6 +29,7 @@
 "发布于 %@" = "released %@";
 "全盘访问权限" = "Full Disk Access";
 "已授权" = "Granted";
+"权限未设置" = "Not granted";
 "去设置" = "Open Settings";
 
 /* Main window — bundleID ultimate fallback (clone) */
