@@ -114,7 +114,14 @@
 - group container：adhoc 抹 team→containermanagerd REJECT app-group（自签证书无解，仅腾讯私钥可过），**但非致命**（swizzle 版第二实例照常常驻）。`app-sandbox` entitlement 必须保留，勿 `--deep`。无"访问其他App数据"弹窗。
 - **偏移强依赖 build**：本 DMG loader arm64 slice 起点 0x2B8000≠文档 0x2DC000。引擎须运行时 `lipo -detailed_info` 取 slice 起点 + 特征码定位，不能硬编码。
 
-## 当前状态（最近更新：2026-06-24）
+## 当前状态（最近更新：2026-06-25 夜）
+
+### 夜间自主进展（2026-06-25 22:00→）
+- ✅ **WeComMulti 立项+发布**：企业微信纯 bundleID 克隆多开**实测可行**(克隆与原版并存>90s不被杀，微信那种Crashpad秒杀未复现——WeCom用Matrix/KSCrash)。独立项目 `/Users/will/Projects/WeComMulti` + 仓库 https://github.com/Wuvomi/WeComMulti (public)。原版WeCom只读未碰。
+- ✅ **自研引擎 0.9.2 净化第一步**：探针去系统TCC.db、改读 ~/Library/Safari + 退避降频(更安全)。已发布。
+- ⏸️ **FDA 检测**：注入式检测对沙盒app存疑(沙盒可能挡保护文件读取，与FDA无关)；深挖subagent被Opus安全策略拦(TCC/沙盒框架触发flag)；且需微信带0.9.2引擎实跑+有FDA才能验证。结论与**用户验证步骤**见 `re/fda-detection.md`，**待用户在场验证**。
+- ⏸️ **净化第二步(loader relauncher)**：反检测框架会触发安全策略，不宜autonomous subagent硬推，**待与用户讨论**。
+- 残留待清(受FDA保护)：`~/Library/Containers/com.tencent.xinClone1/2/3`、`com.tencent.WeWorkMac.clone1`(空壳，授Terminal完全磁盘访问后 `rm -rf` 即可)。
 
 ## 🎉 自研注入引擎落地（2026-06-24，subagent，`re/self-engine.md`，代码 `engine/`）
 - **`WeChatMultiEngine.dylib`(universal)**：constructor ① swizzle `+[NSRunningApplication runningApplicationsWithBundleIdentifier:]` 仅对 com.tencent.xinWeChat 返回空(覆盖全派发路径) ② 权限探针(`CGPreflightScreenCaptureAccess`+读 TCC.db)写 `perms.json`。
