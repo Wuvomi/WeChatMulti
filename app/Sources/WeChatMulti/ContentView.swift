@@ -50,12 +50,14 @@ struct ContentView: View {
                 Toggle("在顶部菜单栏显示图标", isOn: $showMenuBarIcon)
                     .toggleStyle(.checkbox).controlSize(.small).font(.callout)
                 Spacer(minLength: 10)
-                Button(buttonLabel) {
-                    if model.needsDownload { model.showDownloadConfirm = true }
-                    else { model.installBestEngine() }
+                if showActionButton {
+                    Button(buttonLabel) {
+                        if model.needsDownload { model.showDownloadConfirm = true }
+                        else { model.installBestEngine() }
+                    }
+                    .buttonStyle(SolidButton(color: installButtonColor, minHeight: 30))
+                    .disabled(model.installing)
                 }
-                .buttonStyle(SolidButton(color: installButtonColor, minHeight: 30))
-                .disabled(model.installing)
             }
         }
         .padding(12)
@@ -178,13 +180,16 @@ struct ContentView: View {
         return base
     }
 
+    // 底部动作按钮：仅在"有事可做"时显示——版本搞不定→下载换版本；引擎过时→更新；未装→安装。
+    // 一切正常工作时不显示(去掉无意义的"重新安装")。
+    private var showActionButton: Bool {
+        model.installing || model.needsDownload || model.engineOutdated || !model.multiOpenActive
+    }
     private var buttonLabel: String {
         if model.installing { return String(localized: "处理中…") }
         if model.needsDownload { return String(localized: "下载并替换为兼容版微信") }
         if model.engineOutdated { return String(localized: "更新双开引擎") }
-        return model.multiOpenActive
-            ? String(localized: "重新安装双开插件")
-            : String(localized: "安装双开插件")
+        return String(localized: "安装双开引擎")   // 未装任何方案
     }
 
     // 英文标签更长 → 加宽标签列(利用右边空白)；中文保持 84 不变

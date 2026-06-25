@@ -55,6 +55,7 @@
 "重新安装双开插件" = "Reinstall Multi-instance Plugin";
 "安装双开插件" = "Install Multi-instance Plugin";
 "更新双开引擎" = "Update Multi-open Engine";
+"安装双开引擎" = "Install Multi-open Engine";
 "引擎需更新（请点下方更新）" = "Engine needs update (tap Update below)";
 "改用自研引擎（实验）" = "Switch to self-built engine (experimental)";
 

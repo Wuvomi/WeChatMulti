@@ -661,10 +661,19 @@ final class WeChatModel: ObservableObject {
     }
 
     private func detectX1a0He() {
-        x1a0heInstalled =
-            FileManager.default.fileExists(atPath: appPath + "/Contents/Resources/wechat.dylib.original")
-            || FileManager.default.fileExists(atPath: appPath + "/Contents/Frameworks/X1a0HeWeChatPlugin.dylib")
-        if x1a0heInstalled { ensureX1a0HeSettings() } else { x1a0heMultiOpenOn = false }
+        // X1a0He 真正生效 = 插件文件在 Frameworks 且 业务体 LC_LOAD_DYLIB 引用了它。
+        // 不能只看 wechat.dylib.original——自研引擎安装也会留 .original、并把 X1a0He 插件挪成 .bak，
+        // 那种情况下 body 其实是干净/自研,不该误判成 X1a0He(之前的 bug)。
+        let plugin = appPath + "/Contents/Frameworks/X1a0HeWeChatPlugin.dylib"
+        let body = appPath + "/Contents/Resources/wechat.dylib"
+        if FileManager.default.fileExists(atPath: plugin),
+           shellRun("/usr/bin/otool", ["-l", body]).output.contains("X1a0HeWeChatPlugin.dylib") {
+            x1a0heInstalled = true
+            ensureX1a0HeSettings()
+        } else {
+            x1a0heInstalled = false
+            x1a0heMultiOpenOn = false
+        }
     }
 
     /// 自愈：装了 X1a0He 就必须确保「多开开关=开」+「一次性弹窗已埋」，否则显示"已生效"是欺骗用户
