@@ -137,7 +137,14 @@
 
 ## 当前状态（最近更新：2026-06-25）
 
-- **阶段**：✅ GUI v1.29（中英双语）；**核心可用(X1a0He)**；X1a0He 机制已 100% 逆向；并行推进：A自研引擎(同路径多开) + 版本日期
+- **阶段**：✅ GUI v1.30（中英双语+英文加宽）；**核心可用(X1a0He)**；X1a0He 机制已 100% 逆向；进行中：A自研引擎(同路径多开)；bundleID 终极兜底已验证概念
+
+### bundleID 终极兜底（2026-06-25 /tmp 实测，概念已证实）
+- **目的**：版本无关的"永不失效"兜底——所有注入/字节方案失效(微信大改/项目长期没维护)时仍能多开。
+- **实测**：纯克隆(零注入零patch) `/Applications/WeChat.app` → 还原干净业务体 → 改 `CFBundleIdentifier=com.tencent.xinClone1` → adhoc 重签 → **独立实例能起、生成独立沙盒容器**(`~/Library/Containers/com.tencent.xinClone1`=独立登录/数据)。多开门全按 bundle 身份判定，换 id 即绕。
+- **稳定性待坐实**：两次裸克隆都未稳住——但**被并发的 A engine subagent /tmp pkill 清理污染**，不算数；且裸重签 entitlement 配方有坑(app-group `5A4RE8SF68.com.tencent.xinWeChat` 绑腾讯 team，adhoc 不匹配→宽限后被杀；删掉又导致 app-sandbox 起不来)。
+- **待办**：A 跑完后做一次**不受干扰的干净稳定性测试** + 定 adhoc 下正确签名配方(app-group/application-identifier 怎么处理)→ 稳了就接进 GUI 作终极兜底按钮。`engine/install-clone.sh` 是现成起点。
+- **取舍**：✅版本无关韧性拉满；⚠️独立登录(多账号本应如此)、多一个.app、签名配方讲究。
 
 ### GUI 近期变更（v1.27–v1.29）
 - v1.27 绿按钮「多开一个新微信」；v1.28 菜单栏图标回 `3.square.fill`(语言中立)、菜单文案对齐、**找不到微信→灰按钮+手动选 .app 路径**(`appPath` 可配置+`chooseWeChatPath` NSOpenPanel，泛用性)。
