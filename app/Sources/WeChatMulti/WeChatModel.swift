@@ -44,6 +44,42 @@ final class WeChatModel: ObservableObject {
     @Published var ourEngineInstalled = false   // 自研引擎是否已装入当前微信
     @Published var installing = false
     @Published var errorMessage: String?   // 仅真报错时弹窗（用户取消密码框不算）
+    @Published var updateMessage: String?  // 检测更新结果（弹窗）
+
+    static let repoURL = "https://github.com/Wuvomi/WeChatMulti"
+    static let releasesAPI = "https://api.github.com/repos/Wuvomi/WeChatMulti/releases/latest"
+
+    /// 从 GitHub releases 检测新版本：比对 tag 与本机 CFBundleShortVersionString。
+    /// 仓库未公开时 API 返回 404 → 提示"可能仓库未公开"。
+    func checkForUpdate() {
+        updateMessage = String(localized: "正在检查更新…")
+        Task { @MainActor in
+            guard let url = URL(string: Self.releasesAPI) else { return }
+            do {
+                let (data, resp) = try await URLSession.shared.data(from: url)
+                let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                guard code == 200,
+                      let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let tag = obj["tag_name"] as? String else {
+                    updateMessage = String(localized: "检查更新失败（可能仓库尚未公开）。")
+                    return
+                }
+                let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+                let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
+                if latest.compare(current, options: .numeric) == .orderedDescending {
+                    updateMessage = String(localized: "发现新版本 \(tag)！前往项目主页下载。")
+                } else {
+                    updateMessage = String(localized: "已是最新版本（\(current)）。")
+                }
+            } catch {
+                updateMessage = String(localized: "检查更新失败：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func openRepoPage() {
+        if let url = URL(string: Self.repoURL) { NSWorkspace.shared.open(url) }
+    }
 
     // MARK: - bundleID 终极兜底（克隆）状态
     @Published var existingCloneCount = 0   // 已存在克隆总数(不论是否在跑)，N=1..K

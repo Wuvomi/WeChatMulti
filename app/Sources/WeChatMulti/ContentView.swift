@@ -13,13 +13,10 @@ struct ContentView: View {
                 else if model.cloneMode { model.openCloneInstance() }
                 else { model.openNewInstance() }
             }) {
-                Text(!model.appInstalled ? String(localized: "未找到微信 · 点此选择位置")
-                     : model.cloneMode ? String(localized: "新开一个独立副本")
-                     : String(localized: "新开一个微信"))
+                Text(mainButtonText)
             }
-            .buttonStyle(SolidButton(
-                color: !model.appInstalled ? .gray : (model.cloneMode ? .indigo : .green),
-                fullWidth: true, minHeight: 46, titleFont: .title3))
+            .buttonStyle(SolidButton(color: mainButtonColor,
+                                     fullWidth: true, minHeight: 46, titleFont: .title3))
             .disabled(model.installing)
 
             // 状态 + 权限（合并为一栏，红/绿）
@@ -93,6 +90,26 @@ struct ContentView: View {
         } message: {
             Text("删除克隆的数据容器受 macOS 保护，需要先在「系统设置 > 隐私与安全性 > 完全磁盘访问」中勾选本工具，然后再清理。")
         }
+        .alert("检测更新", isPresented: Binding(
+            get: { model.updateMessage != nil },
+            set: { if !$0 { model.updateMessage = nil } }
+        )) {
+            Button("前往主页") { model.openRepoPage(); model.updateMessage = nil }
+            Button("好", role: .cancel) { model.updateMessage = nil }
+        } message: {
+            Text(model.updateMessage ?? "")
+        }
+    }
+
+    // 主按钮文案/颜色：未找到→灰(选路径)；终极兜底→紫(独立副本)；否则→绿(新开微信)。
+    private var mainButtonText: String {
+        if !model.appInstalled { return String(localized: "未找到微信 · 点此选择位置") }
+        if model.cloneMode { return String(localized: "新开一个独立副本") }
+        return String(localized: "新开一个微信")
+    }
+    private var mainButtonColor: Color {
+        if !model.appInstalled { return .gray }
+        return model.cloneMode ? .indigo : .green
     }
 
     // "已打开的微信"右值：N（已克隆 X 个）。N=在跑实例总数；X=已存在克隆总数。X>0 才显括号。

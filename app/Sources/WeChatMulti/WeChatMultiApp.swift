@@ -16,6 +16,9 @@ struct WeChatMultiApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("关于 微信多开工具") { WeChatMultiApp.showAboutPanel() }
+                Divider()
+                Button("检测更新…") { model.checkForUpdate() }
+                Button("项目主页") { model.openRepoPage() }
             }
         }
 
