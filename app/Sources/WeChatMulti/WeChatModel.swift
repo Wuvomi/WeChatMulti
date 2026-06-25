@@ -187,7 +187,7 @@ final class WeChatModel: ObservableObject {
         refresh()
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+            Task { @MainActor in self?.refreshLive() }
         }
         // 实例数变化即时响应：监听 App 启动/退出
         let nc = NSWorkspace.shared.notificationCenter
@@ -220,6 +220,17 @@ final class WeChatModel: ObservableObject {
         if onlineReleaseDates.isEmpty {
             Task { await fetchReleaseDates() }
         }
+    }
+
+    /// 轻量刷新（定时器每 2 秒）：只更新动态项——版本号(plist)、克隆/实例计数、权限(perms.json)。
+    /// 不跑重子进程检测(codesign/otool/defaults)——那些引擎/签名态只在加载和安装动作后由 refresh() 跑，
+    /// 各安装方法完成时已调 refresh()，故此处省去即可，避免每 2 秒在主线程串行 spawn 多个子进程卡 UI。
+    func refreshLive() {
+        guard appInstalled else { return }
+        readVersion()
+        scanClones()
+        countInstances()
+        checkPermissions()
     }
 
     /// 可选增强：异步拉一次在线「版本→发布月」map 覆盖/扩展内置。
@@ -257,15 +268,17 @@ final class WeChatModel: ObservableObject {
     private func cloneAppPath(_ n: Int) -> String { cloneDir + "/WeChatClone\(n).app" }
     private func cloneExecPath(_ n: Int) -> String { cloneAppPath(n) + "/Contents/MacOS/WeChat" }
 
-    /// 已存在的克隆尾号集合（扫 WeChatCloneN.app；N 连续从 1 起，遇缺口即止 → 与"尾号复用"语义一致）。
-    /// existingCloneCount = K（最大连续尾号）。
+    /// 已存在的克隆尾号集合（glob 扫目录下所有 WeChatCloneN.app，升序）。
+    /// 用 glob 而非"连续遇洞即止"：用户在访达手动删了中间某个克隆(留洞)时，
+    /// 仍能扫到洞后面的克隆 → 计数准确、清理不漏、不会有删不掉的残留。
     private func existingCloneNumbers() -> [Int] {
-        var nums: [Int] = []
-        var n = 1
-        while FileManager.default.fileExists(atPath: cloneAppPath(n)) {
-            nums.append(n); n += 1
-        }
-        return nums
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: cloneDir) else { return [] }
+        return entries.compactMap { name -> Int? in
+            guard name.hasPrefix("WeChatClone"), name.hasSuffix(".app") else { return nil }
+            let mid = name.dropFirst("WeChatClone".count).dropLast(".app".count)
+            guard let n = Int(mid), n >= 1 else { return nil }
+            return n
+        }.sorted()
     }
 
     /// 某克隆是否在跑：pgrep 其 exec 路径（克隆 bundleId 各异，NSWorkspace 按 bundleId 不好枚举，用进程路径最稳）。
@@ -637,11 +650,6 @@ final class WeChatModel: ObservableObject {
 
     func openFullDiskAccessSettings() {
         openURL("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
-    }
-
-    /// 截图依赖「屏幕录制」权限——提前授好，免得用时才退微信去设置
-    func openScreenRecordingSettings() {
-        openURL("x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
     }
 
     private func openURL(_ s: String) {

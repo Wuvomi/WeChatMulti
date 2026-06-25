@@ -149,6 +149,13 @@
 **待用户(在场时)：** ① 装机验证自研引擎(会替换 X1a0He,可逆);② 补 docs/截图;③ 清 3×36KB 空壳容器 `com.tencent.xinClone1/2/3`(受 FDA 保护,`re/clone-verdict.md` 有法)。
 **安全：** 全程仅 /tmp 施工,`/Applications/WeChat.app`(X1a0He)未碰、签名有效、插件在位。
 
+### GUI 代码审查（2026-06-25，只读 subagent + 主会话修复）
+多个 subagent 改过 GUI,做了一次只读审查。**已修(高/中真bug)：**
+- **H2 主线程卡顿**：`refresh()` 每 2s 在主线程串行 spawn 多个子进程(codesign/otool/defaults)→ 拆出轻量 `refreshLive()`(只 readVersion/scanClones/countInstances/checkPermissions),定时器改调它;重检测只在加载+安装后由 `refresh()` 跑(各安装方法已调 refresh)。
+- **M1 克隆尾号遇洞漏清理**：`existingCloneNumbers()` 改 glob 扫描(扫所有 `WeChatCloneN.app`,不再连续遇洞即止)→ 手动删中间克隆后仍计数准、清理不漏、无删不掉的残留。
+- **H1 死代码**：删 `openScreenRecordingSettings()`(屏幕录制行早先按需求删了、无调用)。`screenOK` 仍从 perms.json 解析保留(无害,留未来用)。
+**待用户定夺(低优先级,未改)：** M2 克隆 pgrep 子串匹配靠 `.app/` 边界(当前安全,改路径模板才会炸);M3 克隆区与主安装的 `installing` 互斥已基本够;L1 `compatReason` tooHigh 串多传一个相同实参(输出正确,可清)。审查确认:activeEngine 优先级/engineName 全覆盖/perms.json 回落/无旧 TCC.db 残留/本地化 key 完整/无强解包/switch 穷尽——均 OK。
+
 ### 🎉 bundleID 终极兜底坐实（2026-06-25 12:5x，`re/clone-verdict.md`）
 - **被杀真凶**：非系统宽限——微信内置 **Crashpad** 启动时 `bootstrap_check_in` mach 名 `5A4RE8SF68.<bundleId>.crashpad.*` 被沙盒 `deny(1100)`→SIGTRAP 自退(exit133)。沙盒只放行【进程自己 application-identifier 的 team 段】为前缀的 mach 名。
 - **稳定配方钥匙**：`com.apple.application-identifier` = **`5A4RE8SF68.com.tencent.xinCloneN`**(保留腾讯 team 前缀、只换 bundle 后缀)→ 放行 Crashpad 不被杀。app-group 同理(各克隆独立 group 容器)。app-sandbox 保留。其余 cs/files/network/mach-lookup 能力位照搬。adhoc 逐文件深→浅签、顶层带 entitlements 最后、不 --deep、清 quarantine。
