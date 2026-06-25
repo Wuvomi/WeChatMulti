@@ -1,0 +1,63 @@
+/* WeChatMulti — English */
+
+/* App & menu bar */
+"微信多开工具" = "WeChat Multi";
+"➕ 新开一个微信" = "➕ Open a New WeChat";
+"微信 %@ · build %@ · 运行中 %lld" = "WeChat %@ · build %@ · %lld running";
+"✅ 多开已启用" = "✅ Multi-instance enabled";
+"⚠️ 多开未启用" = "⚠️ Multi-instance off";
+"未检测到微信" = "WeChat not found";
+"主界面" = "Main Window";
+"退出" = "Quit";
+
+/* Main window — primary button */
+"新开一个微信" = "Open a New WeChat";
+"未找到微信 · 点此选择位置" = "WeChat not found · Click to locate it";
+
+/* Main window — status rows */
+"已打开的微信" = "Open WeChats";
+"%lld 个" = "%lld";
+"双开插件状态" = "Multi-instance";
+"已可用（%@ 方案）" = "Ready (%@)";
+"不可用" = "Unavailable";
+"双开插件版本" = "Plugin version";
+"未安装" = "Not installed";
+"当前微信版本" = "WeChat version";
+"发布于 %@" = "released %@";
+"全盘访问权限" = "Full Disk Access";
+"已授权" = "Granted";
+"去设置" = "Open Settings";
+
+/* Main window — orange notices */
+"⚠️ App Store 沙盒版不被支持，请改用官网版" = "⚠️ The App Store (sandboxed) build isn't supported. Please use the version from the official website.";
+"⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。" = "⚠️ Without this, WeChat keeps prompting to access other apps' data. If it still prompts after granting access, remove WeChat with “−” and re-add it with “+” (an old macOS bug).";
+
+/* Main window — menu-bar checkbox & install button */
+"在顶部菜单栏显示图标" = "Show icon in the menu bar";
+"处理中…" = "Working…";
+"下载并替换为兼容版微信" = "Download & Replace with a Compatible WeChat";
+"重新安装双开插件" = "Reinstall Multi-instance Plugin";
+"安装双开插件" = "Install Multi-instance Plugin";
+
+/* Alert — download & replace */
+"下载并替换微信" = "Download & Replace WeChat";
+"取消" = "Cancel";
+"下载并替换" = "Download & Replace";
+
+/* Alert — operation failed */
+"操作失败" = "Operation Failed";
+"好" = "OK";
+
+/* File picker panel */
+"选择微信 App" = "Choose WeChat App";
+
+/* Compatibility notes (compatReason) */
+"你正在用 App Store 版微信，它被 macOS 沙盒限制、插件无法注入，所以多开用不了。\n\n需下载官网版 %@（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。" = "You're using the App Store build of WeChat. It's restricted by the macOS sandbox, so the plugin can't be injected and multi-instance won't work.\n\nThe official build %@ (about 470 MB) needs to be downloaded and installed over it. WeChat will quit during installation; your chat history won't be lost.";
+"当前微信 %@（%@）比插件支持的最新版（%@）还新，暂时用不了。\n\n需下载兼容版 %@（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。" = "Your WeChat %1$@ (%2$@) is newer than the latest version the plugin supports (%3$@), so it won't work yet.\n\nThe compatible build %3$@ (about 470 MB) needs to be downloaded and installed over it. WeChat will quit during installation; your chat history won't be lost.";
+"未检测到微信，需下载官网版 %@（约 470MB）安装。聊天记录（若有）不会丢失。" = "WeChat wasn't found. The official build %@ (about 470 MB) needs to be downloaded and installed. Your chat history (if any) won't be lost.";
+
+/* Error messages */
+"未检测到微信版本" = "Couldn't detect the WeChat version.";
+"下载失败：%@" = "Download failed: %@";
+"安装失败：%@" = "Installation failed: %@";
+"未找到内置 X1a0He 安装包" = "The bundled X1a0He installer package wasn't found.";

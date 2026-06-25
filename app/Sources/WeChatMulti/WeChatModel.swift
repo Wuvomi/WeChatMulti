@@ -61,18 +61,18 @@ final class WeChatModel: ObservableObject {
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
 
     /// 插件版本行：左灰标签固定"插件版本"，右值=版本号（方案名只在双开状态行显示）
-    var engineRowLabel: String { "双开插件版本" }
+    var engineRowLabel: String { String(localized: "双开插件版本") }
     var engineRowValue: String {
         switch activeEngine {
         case .x1a0he: return x1a0heVersion
         case .weChatTweak: return engineVersion ?? "?"
-        case .none: return "未安装"
+        case .none: return String(localized: "未安装")
         }
     }
 
     /// 自动按当前微信版本选最合适的引擎并应用：老版(在 WeChatTweak 支持表内)→byte-patch；否则→X1a0He 注入
     func installBestEngine() {
-        guard let b = build else { errorMessage = "未检测到微信版本"; return }
+        guard let b = build else { errorMessage = String(localized: "未检测到微信版本"); return }
         if supportedBuilds.contains(b) {
             patch()
         } else {
@@ -99,11 +99,11 @@ final class WeChatModel: ObservableObject {
     var compatReason: String {
         switch compat {
         case .appStore:
-            return "你正在用 App Store 版微信，它被 macOS 沙盒限制、插件无法注入，所以多开用不了。\n\n需下载官网版 \(targetVersion)（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。"
+            return String(localized: "你正在用 App Store 版微信，它被 macOS 沙盒限制、插件无法注入，所以多开用不了。\n\n需下载官网版 \(targetVersion)（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。")
         case .tooHigh:
-            return "当前微信 \(version ?? "?")（\(build ?? "?")）比插件支持的最新版（\(targetVersion)）还新，暂时用不了。\n\n需下载兼容版 \(targetVersion)（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。"
+            return String(localized: "当前微信 \(version ?? "?")（\(build ?? "?")）比插件支持的最新版（\(targetVersion)）还新，暂时用不了。\n\n需下载兼容版 \(targetVersion)（约 470MB）并替换。安装时会关闭微信，聊天记录不会丢失。")
         case .notInstalled:
-            return "未检测到微信，需下载官网版 \(targetVersion)（约 470MB）安装。聊天记录（若有）不会丢失。"
+            return String(localized: "未检测到微信，需下载官网版 \(targetVersion)（约 470MB）安装。聊天记录（若有）不会丢失。")
         case .ok: return ""
         }
     }
@@ -117,7 +117,7 @@ final class WeChatModel: ObservableObject {
             let dl = shellRun("/usr/bin/curl", ["-sL", "-m", "1800", "-o", tmp, url])
             guard dl.status == 0, FileManager.default.fileExists(atPath: tmp),
                   (try? FileManager.default.attributesOfItem(atPath: tmp)[.size] as? Int ?? 0) ?? 0 > 10_000_000 else {
-                await MainActor.run { self.installing = false; self.errorMessage = "下载失败：\(dl.output)" }
+                await MainActor.run { self.installing = false; self.errorMessage = String(localized: "下载失败：\(dl.output)") }
                 return
             }
             _ = shellRun("/usr/bin/osascript", ["-e", "tell application \"WeChat\" to quit"])
@@ -138,7 +138,7 @@ final class WeChatModel: ObservableObject {
             await MainActor.run {
                 self.installing = false
                 let cancelled = r.output.contains("-128") || r.output.contains("用户已取消")
-                if !r.output.contains("OK") && !cancelled { self.errorMessage = "安装失败：\(r.output)" }
+                if !r.output.contains("OK") && !cancelled { self.errorMessage = String(localized: "安装失败：\(r.output)") }
                 self.refresh()
             }
         }
@@ -189,6 +189,25 @@ final class WeChatModel: ObservableObject {
         } else {
             detectPatched()
         }
+        if onlineReleaseDates.isEmpty {
+            Task { await fetchReleaseDates() }
+        }
+    }
+
+    /// 可选增强：异步拉一次在线「版本→发布月」map 覆盖/扩展内置。
+    /// 拉不到/解析失败就静默保留内置数据，绝不阻塞 UI、绝不弹错。格式见 VERSION_DATES.md。
+    private func fetchReleaseDates() async {
+        guard let url = URL(string:
+            "https://raw.githubusercontent.com/zsbai/wechat-versions/master/mac-release-dates.json") else { return }
+        do {
+            let (data, _) = try await URLSession.shared.data(from: url)
+            // 期望形如 { "4.1.11": "2026-06", ... }；非法/空就忽略。
+            if let map = try JSONSerialization.jsonObject(with: data) as? [String: String], !map.isEmpty {
+                onlineReleaseDates = map
+            }
+        } catch {
+            // 静默：离线/404/格式不对都用内置数据兜底，不打扰用户
+        }
     }
 
     private func countInstances() {
@@ -227,6 +246,51 @@ final class WeChatModel: ObservableObject {
             version = dict["CFBundleShortVersionString"] as? String
             build = dict["CFBundleVersion"] as? String
         }
+    }
+
+    // MARK: - 版本 → 近似发布日期
+    //
+    // 微信 CFBundleShortVersionString 只有 3 段（如 "4.1.11"），对应多个内部 build，
+    // 对不准具体哪天，但月级近似可接受（让用户对"版本多旧"有直观感）。
+    // 数据来源/更新方式见 app/VERSION_DATES.md。优先级：一定有数据 > 月级近似 > 精确到天。
+
+    /// 内置「marketing version → 近似发布月（YYYY-MM）」。离线一定可用，保证当前版本(4.1.11)有数据。
+    /// 取自微信官方更新日志 weixin.qq.com/updates?platform=mac（详见 VERSION_DATES.md）。
+    private static let builtinReleaseDates: [String: String] = [
+        "4.1.11": "2026-06",
+        "4.1.10": "2026-05",
+        "4.1.9":  "2026-04",
+        "4.1.8":  "2026-03",
+        "4.1.7":  "2026-01",
+        "4.1.6":  "2025-12",
+        "4.1.5":  "2025-11",
+        "4.1.4":  "2025-11",
+        "4.1.2":  "2025-10",
+        "4.1.1":  "2025-09",
+        "4.1.0":  "2025-08",
+        "4.0.6":  "2025-07",
+        "4.0.5":  "2025-05",
+        "4.0.3":  "2025-03",
+        "3.8.9":  "2024-09",
+        "3.8.8":  "2024-05",
+        "3.8.7":  "2024-03",
+        "3.8.6":  "2023-12",
+        "3.8.5":  "2023-11",
+        "3.8.4":  "2023-10",
+        "3.8.2":  "2023-08",
+        "3.8.1":  "2023-07",
+        "3.8.0":  "2023-05",
+    ]
+
+    /// 启动时异步拉到的在线 map（可覆盖/扩展内置）；拉不到就为空，绝不阻塞 UI、绝不报错。
+    @Published private var onlineReleaseDates: [String: String] = [:]
+
+    /// 当前微信版本的近似发布月（YYYY-MM），匹配不到返回 nil → UI 只显版本号（不报错）。
+    var releaseDate: String? {
+        guard let v = version else { return nil }
+        if let d = onlineReleaseDates[v] { return d }            // 在线优先
+        if let d = Self.builtinReleaseDates[v] { return d }      // 内置兜底
+        return nil
     }
 
     private func readSign() {
@@ -342,7 +406,7 @@ final class WeChatModel: ObservableObject {
     /// GUI 内一键启用 X1a0He 注入引擎：退微信 → 用内置 pkg 经管理员权限安装（弹原生密码框）
     func installX1a0He() {
         guard let pkg = Bundle.main.path(forResource: "X1a0HeWeChatPlugin", ofType: "pkg") else {
-            errorMessage = "未找到内置 X1a0He 安装包"; return
+            errorMessage = String(localized: "未找到内置 X1a0He 安装包"); return
         }
         installing = true
         Task.detached {

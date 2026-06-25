@@ -15,6 +15,11 @@ cp "$BIN" "$APP/Contents/MacOS/WeChatMulti"
 [ -f Resources/menubar.png ] && cp Resources/menubar.png "$APP/Contents/Resources/menubar.png"
 [ -f Resources/X1a0HeWeChatPlugin.pkg ] && cp Resources/X1a0HeWeChatPlugin.pkg "$APP/Contents/Resources/X1a0HeWeChatPlugin.pkg"
 
+# 本地化资源（简中 / 英文），按系统语言自动切换
+for lproj in zh-Hans.lproj en.lproj; do
+  [ -d "Resources/$lproj" ] && cp -R "Resources/$lproj" "$APP/Contents/Resources/$lproj"
+done
+
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -22,6 +27,12 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
 <dict>
   <key>CFBundleName</key><string>WeChatMulti</string>
   <key>CFBundleDisplayName</key><string>微信多开工具</string>
+  <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>zh-Hans</string>
+    <string>en</string>
+  </array>
   <key>CFBundleIdentifier</key><string>com.will.wechatmulti</string>
   <key>CFBundleVersion</key><string>0.1</string>
   <key>CFBundleShortVersionString</key><string>0.1</string>

@@ -9,7 +9,7 @@ struct WeChatMultiApp: App {
     var body: some Scene {
         Window(Text("微信多开工具"), id: "main") {
             ContentView(model: model)
-                .frame(width: 360)
+                .frame(width: ContentView.isEnglishUI ? 408 : 360)
                 .onAppear { model.startAutoRefresh() }
         }
         .windowResizability(.contentSize)
@@ -36,7 +36,7 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("➕ 多开一个新微信") { model.openNewInstance() }
+        Button("➕ 新开一个微信") { model.openNewInstance() }
             .keyboardShortcut("n")
             .disabled(!model.appInstalled)
 

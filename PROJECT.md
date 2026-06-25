@@ -137,7 +137,13 @@
 
 ## 当前状态（最近更新：2026-06-25）
 
-- **阶段**：✅ GUI v1.26；**核心可用(X1a0He)**；X1a0He 机制已 100% 逆向，自研引擎可复刻(WeChatMain跳)但鲁棒需补路径隔离
+- **阶段**：✅ GUI v1.29（中英双语）；**核心可用(X1a0He)**；X1a0He 机制已 100% 逆向；并行推进：A自研引擎(同路径多开) + 版本日期
+
+### GUI 近期变更（v1.27–v1.29）
+- v1.27 绿按钮「多开一个新微信」；v1.28 菜单栏图标回 `3.square.fill`(语言中立)、菜单文案对齐、**找不到微信→灰按钮+手动选 .app 路径**(`appPath` 可配置+`chooseWeChatPath` NSOpenPanel，泛用性)。
+- v1.29 **中英双语**(subagent)：全部用户可见串走 `String(localized:)`/LocalizedStringKey，`Resources/en.lproj`+`zh-Hans.lproj`(各41条)，build.sh 拷 lproj、Info.plist 加 `CFBundleDevelopmentRegion=zh-Hans`+`CFBundleLocalizations`。按系统语言自动切换。
+- 按钮换自定义 `SolidButton`(实心色，失焦不变灰)；权限行/提示在「检测到全盘正常」时自动隐藏(v1.24，B 经 GUI-FDA 闭环)。
+- **进行中**：版本日期(app/ subagent)、A 自研引擎同路径多开(engine/ subagent)。
 
 ### 同-bundle spawn 谜底（2026-06-25，subagent，`re/spawn-verdict.md`）
 - **spawn 不是秘密**：X1a0He 也是 `system("open -n ...")`，无特殊参数。
