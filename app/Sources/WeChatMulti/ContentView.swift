@@ -21,8 +21,7 @@ struct ContentView: View {
 
             // 状态 + 权限（合并为一栏，红/绿）
             VStack(spacing: 6) {
-                plain(String(localized: "已打开的微信"),
-                      String(localized: "\(model.instanceCount) 个"))
+                plain(String(localized: "已打开的微信"), openCountValue)
                 dot(String(localized: "双开插件状态"),
                     model.multiOpenActive
                       ? String(localized: "已可用（\(model.engineName) 方案）")
@@ -30,8 +29,9 @@ struct ContentView: View {
                     ok: model.multiOpenActive)
                 plain(model.engineRowLabel, model.engineRowValue)
                 plain(String(localized: "当前微信版本"), versionValue)
-                // 检测到全盘权限正常 → 整行隐藏(进一步精简)；检测不到/未授权 → 显示(fallback)
-                if !(model.permsReadable && model.fdaOK) {
+                // 克隆兜底模式无注入探针 → 权限行不适用，隐藏。
+                // 否则：检测到全盘权限正常 → 整行隐藏(精简)；检测不到/未授权 → 显示(fallback)。
+                if !model.cloneMode && !(model.permsReadable && model.fdaOK) {
                     fdaRow()
                 }
             }
@@ -44,7 +44,7 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 
-            if !(model.permsReadable && model.fdaOK) {
+            if !model.cloneMode && !(model.permsReadable && model.fdaOK) {
                 Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -74,6 +74,11 @@ struct ContentView: View {
                 .controlSize(.small)
                 .disabled(model.installing)
             }
+
+            Divider().padding(.vertical, 2)
+
+            // bundleID 终极兜底入口（独立于主多开流程，不替换它）。
+            cloneSection
         }
         .padding(12)
         .alert("下载并替换微信", isPresented: Binding(
@@ -92,6 +97,76 @@ struct ContentView: View {
             Button("好", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
+        }
+        .alert("需要完全磁盘访问", isPresented: Binding(
+            get: { model.needFDAForCleanup },
+            set: { if !$0 { model.needFDAForCleanup = false } }
+        )) {
+            Button("去设置") {
+                model.openFullDiskAccessSettings()
+                model.needFDAForCleanup = false
+            }
+            Button("取消", role: .cancel) { model.needFDAForCleanup = false }
+        } message: {
+            Text("删除克隆的数据容器受 macOS 保护，需要先在「系统设置 > 隐私与安全性 > 完全磁盘访问」中勾选本工具，然后再清理。")
+        }
+    }
+
+    // "已打开的微信"右值：N（已克隆 X 个）。N=在跑实例总数；X=已存在克隆总数。X>0 才显括号。
+    private var openCountValue: String {
+        let n = model.instanceCount
+        if model.existingCloneCount > 0 {
+            return String(localized: "\(n) 个（已克隆 \(model.existingCloneCount) 个）")
+        }
+        return String(localized: "\(n) 个")
+    }
+
+    // bundleID 终极兜底区：折叠入口 + 展开后的管理（新建/在跑/清理）。
+    @ViewBuilder private var cloneSection: some View {
+        if model.showCloneManager {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("用独立副本多开（终极兜底）").font(.callout).bold()
+                    Spacer()
+                    Button {
+                        withAnimation { model.showCloneManager = false }
+                    } label: { Image(systemName: "chevron.up") }
+                        .buttonStyle(.borderless).controlSize(.small)
+                }
+                Text("独立副本 = 独立登录、与版本无关、永不失效。注入方案失效时仍能多开（代价：各副本独立账号、各占约 1.3GB）。")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                plain(String(localized: "已克隆"),
+                      String(localized: "\(model.existingCloneCount) 个 · 在跑 \(model.runningCloneCount) 个"))
+
+                HStack {
+                    Button(String(localized: "新开一个独立副本")) { model.openCloneInstance() }
+                        .buttonStyle(SolidButton(color: .indigo, minHeight: 30))
+                        .disabled(model.installing)
+                    Spacer(minLength: 8)
+                    Button(String(localized: "清理全部克隆")) { model.cleanupClones() }
+                        .controlSize(.small)
+                        .disabled(model.installing || model.existingCloneCount == 0)
+                }
+            }
+            .padding(10)
+            .background(Color.gray.opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        } else {
+            Button {
+                withAnimation { model.showCloneManager = true }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.on.square")
+                    Text("用独立副本多开（终极兜底）")
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                }
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .font(.callout)
         }
     }
 

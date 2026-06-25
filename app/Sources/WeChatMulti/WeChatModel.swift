@@ -45,12 +45,21 @@ final class WeChatModel: ObservableObject {
     @Published var installing = false
     @Published var errorMessage: String?   // 仅真报错时弹窗（用户取消密码框不算）
 
-    enum Engine { case none, weChatTweak, x1a0he, ourOwn }
+    // MARK: - bundleID 终极兜底（克隆）状态
+    @Published var existingCloneCount = 0   // 已存在克隆总数(不论是否在跑)，N=1..K
+    @Published var runningCloneCount = 0    // 在跑克隆数(pgrep 克隆 exec 路径)
+    @Published var showCloneManager = false // 「管理克隆」次级面板开关
+    @Published var needFDAForCleanup = false // 清理克隆需 FDA 但未授予 → 引导授权
+
+    enum Engine { case none, weChatTweak, x1a0he, ourOwn, bundleIDClone }
     /// 检测优先级：自研引擎 > X1a0He > WeChatTweak（谁真装了显示谁）。
+    /// bundleID 克隆是【终极兜底】——只在没有任何注入引擎生效、但有克隆在跑时才作为
+    /// 「当前生效方案」显示，绝不抢注入引擎的显示位（注入正常时仍显注入引擎）。
     var activeEngine: Engine {
         if ourEngineInstalled { return .ourOwn }
         if x1a0heInstalled && x1a0heMultiOpenOn { return .x1a0he }
         if isPatched { return .weChatTweak }
+        if runningCloneCount > 0 { return .bundleIDClone }   // 注入全无、但有克隆在跑 → 兜底方案生效中
         return .none
     }
     var engineName: String {
@@ -58,9 +67,13 @@ final class WeChatModel: ObservableObject {
         case .ourOwn: return String(localized: "自研引擎")
         case .x1a0he: return "X1a0He"           // 品牌名，不翻译
         case .weChatTweak: return "WeChatTweak" // 品牌名，不翻译
+        case .bundleIDClone: return String(localized: "BundleID")
         case .none: return ""
         }
     }
+    /// 克隆兜底模式：当前生效方案是 bundleID 克隆（注入全无、有克隆在跑）。
+    /// 用于克隆模式 UI（隐藏权限行、方案名显「BundleID 方案」）。
+    var cloneMode: Bool { activeEngine == .bundleIDClone }
     var multiOpenActive: Bool { activeEngine != .none }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
     let selfEngineVersion = "0.9.0"   // 自研引擎随本工具版本
@@ -72,6 +85,7 @@ final class WeChatModel: ObservableObject {
         case .ourOwn: return selfEngineVersion
         case .x1a0he: return x1a0heVersion
         case .weChatTweak: return engineVersion ?? "?"
+        case .bundleIDClone: return selfEngineVersion   // 克隆兜底用本工具自己的克隆引擎
         case .none: return String(localized: "未安装")
         }
     }
@@ -85,7 +99,8 @@ final class WeChatModel: ObservableObject {
         case .ourOwn:  installSelfEngine(); return
         case .x1a0he:  installX1a0He();     return
         case .weChatTweak: patch();         return
-        case .none: break
+        // .bundleIDClone = 只有克隆在跑、无注入引擎；安装按钮意在装注入引擎 → 当全新安装处理。
+        case .none, .bundleIDClone: break
         }
         // 全新安装：自研引擎优先。
         installSelfEngine()
@@ -194,6 +209,7 @@ final class WeChatModel: ObservableObject {
         readEngineVersion()
         detectSelfEngine()
         detectX1a0He()
+        scanClones()
         countInstances()
         checkPermissions()
         if configs.isEmpty {
@@ -223,8 +239,139 @@ final class WeChatModel: ObservableObject {
     }
 
     private func countInstances() {
-        instanceCount = NSWorkspace.shared.runningApplications
+        // N = 在跑实例总数 = 原版微信(含注入多开) + 在跑克隆。克隆 bundleId 各异，
+        // 用 pgrep exec 路径数(scanClones 已算好的 runningCloneCount)叠加。
+        let orig = NSWorkspace.shared.runningApplications
             .filter { $0.bundleIdentifier == "com.tencent.xinWeChat" }.count
+        instanceCount = orig + runningCloneCount
+    }
+
+    // MARK: - bundleID 终极兜底（克隆管理）
+    //
+    // 克隆=独立 .app + 独立 bundleId(com.tencent.xinCloneN) + 独立沙盒/group 容器，
+    // 版本无关、永不失效的终极兜底。所有逻辑仅调 engine/install-clone.sh、cleanup-clone.sh，
+    // 不在 GUI 内重复签名/容器逻辑。本入口独立于主多开流程(open -n + 注入)，不替换它。
+
+    /// 克隆存放目录（与 install-clone.sh 默认一致，自动创建）
+    var cloneDir: String { NSHomeDirectory() + "/Library/Application Support/WeChatMulti/Clones" }
+    private func cloneAppPath(_ n: Int) -> String { cloneDir + "/WeChatClone\(n).app" }
+    private func cloneExecPath(_ n: Int) -> String { cloneAppPath(n) + "/Contents/MacOS/WeChat" }
+
+    /// 已存在的克隆尾号集合（扫 WeChatCloneN.app；N 连续从 1 起，遇缺口即止 → 与"尾号复用"语义一致）。
+    /// existingCloneCount = K（最大连续尾号）。
+    private func existingCloneNumbers() -> [Int] {
+        var nums: [Int] = []
+        var n = 1
+        while FileManager.default.fileExists(atPath: cloneAppPath(n)) {
+            nums.append(n); n += 1
+        }
+        return nums
+    }
+
+    /// 某克隆是否在跑：pgrep 其 exec 路径（克隆 bundleId 各异，NSWorkspace 按 bundleId 不好枚举，用进程路径最稳）。
+    private func cloneRunning(_ n: Int) -> Bool {
+        shellRun("/usr/bin/pgrep", ["-f", cloneExecPath(n)]).status == 0
+    }
+
+    /// 扫描克隆，更新 existingCloneCount / runningCloneCount。
+    private func scanClones() {
+        let nums = existingCloneNumbers()
+        existingCloneCount = nums.count
+        runningCloneCount = nums.filter { cloneRunning($0) }.count
+    }
+
+    /// 尾号复用：启动最小的「存在但没在跑」的克隆；1..K 全在跑才新建 Clone(K+1)。
+    /// 尾号只在全占满时 +1，先用完前面的再推进 → 克隆数收敛到历史最大同时实例数，不无限膨胀。
+    func openCloneInstance() {
+        guard appInstalled else { errorMessage = String(localized: "未检测到微信"); return }
+        let nums = existingCloneNumbers()
+        // 找最小的「存在但没在跑」
+        if let reuse = nums.first(where: { !cloneRunning($0) }) {
+            launchClone(reuse)
+            return
+        }
+        // 1..K 全在跑（或一个都没有）→ 新建 K+1
+        let next = (nums.max() ?? 0) + 1
+        installAndLaunchClone(next)
+    }
+
+    /// 直接启动已存在的克隆（复用尾号，无需重建）。
+    private func launchClone(_ n: Int) {
+        let app = cloneAppPath(n)
+        let cfg = NSWorkspace.OpenConfiguration()
+        cfg.createsNewApplicationInstance = true
+        if let loc = preferredWeChatLocale() {
+            cfg.environment = ["LANG": loc, "LC_ALL": loc]
+        }
+        NSWorkspace.shared.openApplication(at: URL(fileURLWithPath: app), configuration: cfg) { _, err in
+            Task { @MainActor in
+                if let err { self.log += "启动克隆\(n)失败：\(err.localizedDescription)\n" }
+                self.scanClones(); self.countInstances()
+            }
+        }
+    }
+
+    /// 新建克隆（调 install-clone.sh，幂等）→ 启动。施工无需管理员权限（克隆放用户目录、adhoc 重签）。
+    private func installAndLaunchClone(_ n: Int) {
+        guard let dir = Bundle.main.resourcePath.map({ $0 + "/engine" }),
+              FileManager.default.fileExists(atPath: dir + "/install-clone.sh") else {
+            errorMessage = String(localized: "未找到内置克隆脚本"); return
+        }
+        let src = appPath
+        let dest = cloneDir
+        installing = true
+        Task.detached {
+            try? FileManager.default.createDirectory(atPath: dest, withIntermediateDirectories: true)
+            let r = shellRun("/bin/bash", ["\(dir)/install-clone.sh", "\(n)", src, dest])
+            await MainActor.run {
+                self.installing = false
+                if r.status != 0 {
+                    self.errorMessage = String(localized: "创建克隆失败：\(r.output)")
+                } else {
+                    self.launchClone(n)
+                }
+                self.scanClones()
+            }
+        }
+    }
+
+    /// 是否已有「完全磁盘访问」——清理克隆数据容器(受 TCC 保护)需要。
+    /// 探针：尝试列出 ~/Library/Application Support/com.apple.TCC/（无 FDA 会 Operation not permitted）。
+    func hasFullDiskAccess() -> Bool {
+        let tcc = NSHomeDirectory() + "/Library/Application Support/com.apple.TCC"
+        return (try? FileManager.default.contentsOfDirectory(atPath: tcc)) != nil
+    }
+
+    /// 清理全部克隆（.app + 数据容器 + group 容器）。数据容器删除需 FDA：
+    /// 无 FDA → 不静默失败，置 needFDAForCleanup 引导用户去授权。
+    func cleanupClones() {
+        let nums = existingCloneNumbers()
+        guard !nums.isEmpty else { return }
+        guard hasFullDiskAccess() else {
+            needFDAForCleanup = true   // UI 弹「去设置」引导，不静默失败
+            return
+        }
+        needFDAForCleanup = false
+        guard let dir = Bundle.main.resourcePath.map({ $0 + "/engine" }),
+              FileManager.default.fileExists(atPath: dir + "/cleanup-clone.sh") else {
+            errorMessage = String(localized: "未找到内置克隆清理脚本"); return
+        }
+        let destDir = cloneDir
+        installing = true
+        Task.detached {
+            var failedCount = 0
+            for n in nums {
+                let r = shellRun("/bin/bash", ["\(dir)/cleanup-clone.sh", "\(n)", destDir])
+                if r.status != 0 { failedCount += 1 }
+            }
+            let anyFailed = failedCount > 0
+            await MainActor.run {
+                self.installing = false
+                // 多为数据容器受 FDA 保护未删净 → 引导授权
+                if anyFailed { self.needFDAForCleanup = true }
+                self.scanClones(); self.countInstances()
+            }
+        }
     }
 
     private func readEngineVersion() {

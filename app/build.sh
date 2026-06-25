@@ -24,10 +24,13 @@ done
 ENGINE_SRC="../engine"
 if [ -d "$ENGINE_SRC" ]; then
   mkdir -p "$APP/Contents/Resources/engine"
-  for f in install-self-engine.sh WeChatMultiEngine.dylib insert_dylib.py locate_gate1.py; do
+  # 注入引擎资产 + bundleID 终极兜底克隆脚本(install-clone / cleanup-clone)
+  for f in install-self-engine.sh WeChatMultiEngine.dylib insert_dylib.py locate_gate1.py install-clone.sh cleanup-clone.sh; do
     [ -f "$ENGINE_SRC/$f" ] && cp "$ENGINE_SRC/$f" "$APP/Contents/Resources/engine/$f"
   done
-  chmod +x "$APP/Contents/Resources/engine/install-self-engine.sh" 2>/dev/null || true
+  for s in install-self-engine.sh install-clone.sh cleanup-clone.sh; do
+    chmod +x "$APP/Contents/Resources/engine/$s" 2>/dev/null || true
+  done
 fi
 
 cat > "$APP/Contents/Info.plist" <<'EOF'

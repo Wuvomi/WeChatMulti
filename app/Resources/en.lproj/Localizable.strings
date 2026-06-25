@@ -29,6 +29,18 @@
 "已授权" = "Granted";
 "去设置" = "Open Settings";
 
+/* Main window — bundleID ultimate fallback (clone) */
+"BundleID" = "BundleID";
+"%lld 个（已克隆 %lld 个）" = "%1$lld (%2$lld clones)";
+"用独立副本多开（终极兜底）" = "Multi-open with independent copies (ultimate fallback)";
+"独立副本 = 独立登录、与版本无关、永不失效。注入方案失效时仍能多开（代价：各副本独立账号、各占约 1.3GB）。" = "An independent copy = separate login, version-independent, never breaks. It keeps working even when injection methods fail (trade-off: each copy is a separate account and takes ~1.3 GB).";
+"已克隆" = "Clones";
+"%lld 个 · 在跑 %lld 个" = "%1$lld total · %2$lld running";
+"新开一个独立副本" = "Open a New Independent Copy";
+"清理全部克隆" = "Remove All Clones";
+"需要完全磁盘访问" = "Full Disk Access Required";
+"删除克隆的数据容器受 macOS 保护，需要先在「系统设置 > 隐私与安全性 > 完全磁盘访问」中勾选本工具，然后再清理。" = "Deleting a clone's data container is protected by macOS. Please grant this tool Full Disk Access under System Settings > Privacy & Security > Full Disk Access first, then clean up.";
+
 /* Main window — orange notices */
 "⚠️ App Store 沙盒版不被支持，请改用官网版" = "⚠️ The App Store (sandboxed) build isn't supported. Please use the version from the official website.";
 "⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。" = "⚠️ Without this, WeChat keeps prompting to access other apps' data. If it still prompts after granting access, remove WeChat with “−” and re-add it with “+” (an old macOS bug).";
@@ -64,6 +76,9 @@
 "安装失败：%@" = "Installation failed: %@";
 "未找到内置 X1a0He 安装包" = "The bundled X1a0He installer package wasn't found.";
 "未找到内置自研引擎" = "The bundled self-built engine wasn't found.";
+"未找到内置克隆脚本" = "The bundled clone script wasn't found.";
+"未找到内置克隆清理脚本" = "The bundled clone cleanup script wasn't found.";
+"创建克隆失败：%@" = "Failed to create clone: %@";
 
 /* About panel */
 "关于 微信多开工具" = "About WeChat Multi";
