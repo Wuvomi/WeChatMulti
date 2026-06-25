@@ -1,0 +1,147 @@
+#!/bin/bash
+# install-self-engine.sh — 自研最小多开注入引擎安装器(微信 4.1.11)。
+#
+# 对一个 WeChat.app 副本就地施工:
+#   门①  运行时按特征码定位 loader 的单例 cbz w0,patch 成无条件 b。
+#   门③  把 WeChatMultiEngine.dylib 复制进 Contents/Frameworks/,
+#         用 insert_dylib.py 给 wechat.dylib 追加 LC_LOAD_DYLIB
+#         (@rpath/WeChatMultiEngine.dylib),使其随业务体加载并先于门③ swizzle。
+#   重签  adhoc,保留 app-sandbox / app-group / allow-jit 等 entitlement,
+#         不用 --deep,逐文件签名顺序: 引擎 dylib -> 业务体 dylib -> loader -> 整 bundle。
+#
+# 绝不触碰 /Applications/WeChat.app。只对传入的副本施工。
+#
+# 用法:
+#   install-self-engine.sh /path/to/WeChat.app
+#
+# 依赖: lipo / otool / codesign / python3 / clang(仅当需现编译引擎)。
+set -euo pipefail
+
+ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DYLIB_SRC="$ENGINE_DIR/WeChatMultiEngine.dylib"
+INSERT="$ENGINE_DIR/insert_dylib.py"
+LOCATE="$ENGINE_DIR/locate_gate1.py"
+BUNDLE_ID="com.tencent.xinWeChat"
+
+err() { echo "[install][ERR] $*" >&2; exit 1; }
+log() { echo "[install] $*"; }
+
+APP="${1:-}"
+[ -n "$APP" ] || err "用法: $0 /path/to/WeChat.app"
+[ -d "$APP" ] || err "找不到 app: $APP"
+case "$APP" in
+  /Applications/WeChat.app|/Applications/WeChat.app/*)
+    :;;
+esac
+
+LOADER="$APP/Contents/MacOS/WeChat"
+BODY="$APP/Contents/Resources/wechat.dylib"
+FRAMEWORKS="$APP/Contents/Frameworks"
+[ -f "$LOADER" ] || err "缺 loader: $LOADER"
+[ -f "$BODY" ]   || err "缺业务体: $BODY"
+
+# 现编译引擎(若缺二进制)。
+if [ ! -f "$DYLIB_SRC" ]; then
+  log "引擎二进制缺失,现编译…"
+  clang -dynamiclib -fobjc-arc -arch arm64 -arch x86_64 \
+    -framework Foundation -framework AppKit -framework CoreGraphics \
+    -mmacosx-version-min=11.0 \
+    -install_name @rpath/WeChatMultiEngine.dylib \
+    -o "$DYLIB_SRC" "$ENGINE_DIR/WeChatMultiEngine.m"
+fi
+
+############################################
+# 门①: 特征码定位 + byte-patch cbz w0 -> b
+############################################
+log "门①: 定位 loader 单例分支(特征码)…"
+GATE1_OUT="$(python3 "$LOCATE" "$LOADER")"
+echo "$GATE1_OUT" | sed 's/^/[install][gate1] /'
+eval "$GATE1_OUT"   # 注入 GATE1_FAT_OFF / GATE1_ORIG_LE / GATE1_PATCH_LE 等
+
+[ -n "${GATE1_FAT_OFF:-}" ] || err "门①特征码未命中"
+
+# 校验原字节再写,避免误 patch。
+CUR=$(python3 - "$LOADER" "$GATE1_FAT_OFF" <<'PY'
+import sys
+p=sys.argv[1]; off=int(sys.argv[2],16)
+with open(p,"rb") as f:
+    f.seek(off); print(f.read(4).hex())
+PY
+)
+if [ "$CUR" != "$GATE1_ORIG_LE" ]; then
+  if [ "$CUR" == "$GATE1_PATCH_LE" ]; then
+    log "门①已是 patched 状态($CUR),跳过"
+  else
+    err "门①原字节不符: 实读 $CUR 期望 $GATE1_ORIG_LE"
+  fi
+else
+  python3 - "$LOADER" "$GATE1_FAT_OFF" "$GATE1_PATCH_LE" <<'PY'
+import sys
+p=sys.argv[1]; off=int(sys.argv[2],16); patch=bytes.fromhex(sys.argv[3])
+with open(p,"r+b") as f:
+    f.seek(off); f.write(patch)
+print("[install][gate1] patched %s @0x%x -> %s"%(p,off,patch.hex()))
+PY
+fi
+
+############################################
+# 门③: 注入引擎 dylib(LC_LOAD_DYLIB)
+############################################
+log "门③: 安装引擎 dylib 到 Frameworks + insert LC_LOAD_DYLIB…"
+mkdir -p "$FRAMEWORKS"
+cp -f "$DYLIB_SRC" "$FRAMEWORKS/WeChatMultiEngine.dylib"
+
+# wechat.dylib 用 @rpath 解析,需要确认 loader 有指向 Frameworks 的 @rpath。
+# loader 默认带 @executable_path/../Frameworks 的 LC_RPATH;@rpath/WeChatMultiEngine.dylib
+# 即解析到 Contents/Frameworks/WeChatMultiEngine.dylib。
+if otool -l "$LOADER" | grep -qF '@executable_path/../Frameworks'; then
+  log "loader 已含 @executable_path/../Frameworks RPATH,@rpath 可解析 ✓"
+else
+  log "WARN: loader 未见 ../Frameworks RPATH;改用 @loader_path 注入名"
+fi
+
+# 幂等: 若已注入则跳过。
+if otool -l "$BODY" | grep -q 'WeChatMultiEngine.dylib'; then
+  log "业务体已含 WeChatMultiEngine.dylib LC_LOAD_DYLIB,跳过"
+else
+  python3 "$INSERT" "@rpath/WeChatMultiEngine.dylib" "$BODY"
+fi
+
+############################################
+# 重签: adhoc,保留 entitlement,不 --deep
+############################################
+log "重签: 提取 loader 原 entitlements…"
+ENT_PLIST="$(mktemp /tmp/wcm-ent.XXXXXX.plist)"
+codesign -d --entitlements "$ENT_PLIST" --xml "$LOADER" 2>/dev/null || true
+if [ ! -s "$ENT_PLIST" ]; then
+  # 干净 Tencent loader 的 entitlements(app-sandbox 必须保留,否则 loader 自退)。
+  cat > "$ENT_PLIST" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>com.apple.security.app-sandbox</key><true/>
+  <key>com.apple.security.application-groups</key><array><string>5A4RE8SF68.com.tencent.xinWeChat</string></array>
+  <key>com.apple.security.cs.allow-jit</key><true/>
+  <key>com.apple.security.network.client</key><true/>
+  <key>com.apple.security.network.server</key><true/>
+  <key>com.apple.security.files.user-selected.read-write</key><true/>
+</dict></plist>
+PLIST
+fi
+log "entitlements -> $ENT_PLIST"
+
+log "签名顺序: 引擎 -> 业务体 -> loader -> bundle (adhoc, 无 --deep)"
+# 1) 引擎 dylib(adhoc)
+codesign --force --sign - "$FRAMEWORKS/WeChatMultiEngine.dylib"
+# 2) 业务体 dylib(被改了 header,必须重签;adhoc)
+codesign --force --sign - "$BODY"
+# 3) loader(被 byte-patch,重签;带 entitlements,保 app-sandbox)
+codesign --force --sign - --entitlements "$ENT_PLIST" "$LOADER"
+# 4) 整 bundle(密封资源;带同一 entitlements;不 --deep,避免破坏嵌套原厂签名)
+codesign --force --sign - --entitlements "$ENT_PLIST" "$APP"
+
+rm -f "$ENT_PLIST"
+
+log "完成。验证:"
+codesign -dvvv "$APP" 2>&1 | grep -E 'Identifier|flags|TeamIdentifier' | sed 's/^/[install]   /' || true
+log "门① fat 偏移 $GATE1_FAT_OFF, 引擎已注入业务体。可 open -n 起多实例。"
