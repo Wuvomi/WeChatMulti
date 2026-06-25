@@ -17,7 +17,7 @@ struct ContentView: View {
             }
             .buttonStyle(SolidButton(color: mainButtonColor,
                                      fullWidth: true, minHeight: 46, titleFont: .title3))
-            .disabled(model.installing)
+            .disabled(mainButtonDisabled)
 
             // 状态 + 权限（合并为一栏，红/绿）
             VStack(spacing: 6) {
@@ -112,7 +112,13 @@ struct ContentView: View {
     }
     private var mainButtonColor: Color {
         if !model.appInstalled { return .gray }
-        return model.cloneMode ? .indigo : .green
+        if model.cloneMode { return .indigo }
+        if model.multiOpenActive { return .green }
+        return .gray   // 装了微信但没装引擎/不可用 → 灰
+    }
+    // 装了微信却没可用引擎(不可用)→ 禁用(点不动);未找到微信时仍可点(去选路径)。
+    private var mainButtonDisabled: Bool {
+        model.installing || (model.appInstalled && !model.multiOpenActive && !model.cloneMode)
     }
     // 安装按钮色：下载=蓝；引擎过时=橙(醒目引导更新)；已生效=红(重装)；未装=蓝。
     private var installButtonColor: Color {
