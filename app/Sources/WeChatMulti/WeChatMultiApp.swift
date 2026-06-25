@@ -13,12 +13,30 @@ struct WeChatMultiApp: App {
                 .onAppear { model.startAutoRefresh() }
         }
         .windowResizability(.contentSize)
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("关于 微信多开工具") { WeChatMultiApp.showAboutPanel() }
+            }
+        }
 
         MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuBarContent(model: model)
         } label: {
             Image(nsImage: Self.menuBarImage)
         }
+    }
+
+    // 自定义"关于"面板：展示方案/引擎/开源致谢
+    static func showAboutPanel() {
+        let credits = NSAttributedString(
+            string: String(localized: "ABOUT_CREDITS"),
+            attributes: [
+                .font: NSFont.systemFont(ofSize: 11),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ]
+        )
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     static var menuBarImage: NSImage {

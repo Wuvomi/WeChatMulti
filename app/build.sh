@@ -34,14 +34,15 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <string>en</string>
   </array>
   <key>CFBundleIdentifier</key><string>com.will.wechatmulti</string>
-  <key>CFBundleVersion</key><string>0.1</string>
-  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleVersion</key><string>31</string>
+  <key>CFBundleShortVersionString</key><string>0.9.0</string>
   <key>CFBundleExecutable</key><string>WeChatMulti</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>NSHumanReadableCopyright</key><string>仅供学习研究 · github.com/Wuvomi/WeChatMulti</string>
 </dict>
 </plist>
 EOF

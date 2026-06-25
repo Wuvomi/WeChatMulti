@@ -61,3 +61,7 @@
 "下载失败：%@" = "Download failed: %@";
 "安装失败：%@" = "Installation failed: %@";
 "未找到内置 X1a0He 安装包" = "The bundled X1a0He installer package wasn't found.";
+
+/* About panel */
+"关于 微信多开工具" = "About WeChat Multi";
+"ABOUT_CREDITS" = "Multi-open methods\n· Injection: X1a0He plugin / self-built engine (in progress)\n· Ultimate fallback: BundleID independent copy\n\nOpen-source credits\n· X1a0He/X1a0HeWeChatPlugin — injection multi-open engine\n· sunnyyoung/WeChatTweak-macOS — early byte-patch approach\n· WeChat installer: official Tencent DMG (dldir1v6.qq.com)\n· Release dates: official WeChat changelog / zsbai/wechat-versions\n\nFor study and research only; please follow the applicable terms of service.\ngithub.com/Wuvomi/WeChatMulti";
