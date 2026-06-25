@@ -137,7 +137,17 @@
 
 ## 当前状态（最近更新：2026-06-25）
 
-- **阶段**：✅ GUI v1.31（中英双语；菜单图标 6）；**核心可用(X1a0He)**；X1a0He 机制已 100% 逆向；进行中：A自研引擎(同路径多开)；bundleID 终极兜底已验证概念待坐实
+- **阶段**：✅ GUI v0.9.0；**核心可用(X1a0He)**；🎉 **自研引擎同路径多开已攻克并实测**(`re/self-engine-v2.md`)；待办：自研引擎接进 GUI、bundleID 兜底坐实
+
+### 🎉 自研引擎 v2 — 同路径多开攻克（2026-06-25 12:32，`re/self-engine-v2.md`）
+- **达成**：同一 app 副本 `open -n`/exec 起 **2 实例并存稳定 >70s**(direct-exec + open -n 均验证)，零崩溃。/tmp 副本施工，**/Applications 全程未碰，.original md5 不变，X1a0He 完好**。
+- **真门②=`tbz w20,#0` @vmaddr `0x2117e0`**(在出厂自带的放行函数 `0x2106bc` 里)：第二实例 w20.bit0=0→bail→WeChatMain 返回-1→loader `exit(255)`。**中和=运行时特征码定位该 tbz→NOP，仅第二实例装**。
+  - 修正 body-gate-memdiff §2：`WeChatMain`(`0x1637c`)首条 `b 0x2106bc` **出厂自带**，非 X1a0He hook（off-by-4 误读），引擎不动它。
+- **第二实例判据=容器内 `flock` 锁文件**(NSRunningApplication 数不到非LS实例、proc_listpids 被沙盒挡 → 都失效)。门①静态 patch 不变；门③ swizzle 保留但单独不足以放行(只消 UI 提示)。
+- **数据隔离不需要**：共享容器 + MMKV `InterProcess` 多进程锁 + AppEx `--instance-index`，75s 零 DB锁/CRC/崩溃。真·按账号隔离仍靠 clone-bundle(=bundleID 兜底)。
+- **引擎 constructor 3 步**：flock判role → (第二实例)门②tbz NOP → 门③swizzle → 写 perms.json(权限探针=注入微信自检，即用户要的原生效果)。零硬编码偏移(全运行时特征码)。
+- **GUI 对接**：装=`engine/install-self-engine.sh <副本>`；多开=现有 `openNewInstance()`(open -n)即可，无需 clone；权限读容器内 `…/WeChatMulti/perms.json`。
+- **待办**：① 接进 GUI(自研引擎为主、X1a0He 兜底、读 perms.json 显真权限)；② 装机验证留给用户在场时(会替换 X1a0He，autonomous 阶段不做)。
 
 ### ⚠️ 优先级与权限方案纠正（2026-06-25，用户明确）
 - **全盘权限检测=注入微信、伪装成微信自检**（微信自己查自己→写 perms.json 给 GUI 读）。**「把工具自身加进 FDA 读 TCC.db」方案已否决**（之前的 GUI-FDA 闭环说法作废）。原生自检需注入→**依赖自研引擎**；若实现不了再说。

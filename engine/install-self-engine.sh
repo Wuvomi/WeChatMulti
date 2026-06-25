@@ -2,12 +2,19 @@
 # install-self-engine.sh — 自研最小多开注入引擎安装器(微信 4.1.11)。
 #
 # 对一个 WeChat.app 副本就地施工:
-#   门①  运行时按特征码定位 loader 的单例 cbz w0,patch 成无条件 b。
+#   门①  运行时按特征码定位 loader 的单例 cbz w0,patch 成无条件 b(静态 byte-patch)。
+#   门②  纯运行时:引擎 constructor 在"第二+实例"里按特征码定位业务体
+#         0x2106bc 放行函数里的 `tbz w20,#0,<bail>`(单例放行判定)并 NOP 之
+#         ——这步在进程内运行时做,本安装脚本不写盘、无需偏移。详见 re/self-engine-v2.md。
 #   门③  把 WeChatMultiEngine.dylib 复制进 Contents/Frameworks/,
 #         用 insert_dylib.py 给 wechat.dylib 追加 LC_LOAD_DYLIB
-#         (@rpath/WeChatMultiEngine.dylib),使其随业务体加载并先于门③ swizzle。
+#         (@rpath/WeChatMultiEngine.dylib),使其随业务体加载并先于业务体单例检测;
+#         constructor 内再装 NSRunningApplication swizzle(辅助,消 UI 层"已有实例"提示)。
 #   重签  adhoc,保留 app-sandbox / app-group / allow-jit 等 entitlement,
 #         不用 --deep,逐文件签名顺序: 引擎 dylib -> 业务体 dylib -> loader -> 整 bundle。
+#
+# 真门是门②(运行时):没它,第二实例即便门①+门③ 也照样 exit(255)。实测见
+# re/self-engine-v2.md §1。门② 仅在第二+实例触发(flock 容器锁判据),首个实例不动。
 #
 # 绝不触碰 /Applications/WeChat.app。只对传入的副本施工。
 #
@@ -144,4 +151,6 @@ rm -f "$ENT_PLIST"
 
 log "完成。验证:"
 codesign -dvvv "$APP" 2>&1 | grep -E 'Identifier|flags|TeamIdentifier' | sed 's/^/[install]   /' || true
-log "门① fat 偏移 $GATE1_FAT_OFF, 引擎已注入业务体。可 open -n 起多实例。"
+log "门① fat 偏移 $GATE1_FAT_OFF, 引擎已注入业务体。"
+log "门②(业务体单例放行 tbz NOP)由引擎在第二+实例运行时自做,无需安装期偏移。"
+log "可 open -n / 直接 exec 起 2 个同路径实例并存(实测稳定 >70s,见 re/self-engine-v2.md)。"
