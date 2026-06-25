@@ -24,7 +24,7 @@ struct WeChatMultiApp: App {
     static var menuBarImage: NSImage {
         // 用数字图标(语言中立)，多语言泛用
         let cfg = NSImage.SymbolConfiguration(pointSize: 17, weight: .semibold)
-        let img = (NSImage(systemSymbolName: "3.square.fill", accessibilityDescription: "多开")?
+        let img = (NSImage(systemSymbolName: "6.square.fill", accessibilityDescription: "多开")?
             .withSymbolConfiguration(cfg)) ?? NSImage()
         img.isTemplate = true
         return img
