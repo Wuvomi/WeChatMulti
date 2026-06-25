@@ -71,9 +71,10 @@ final class WeChatModel: ObservableObject {
         case .none: return ""
         }
     }
-    /// 克隆兜底模式：当前生效方案是 bundleID 克隆（注入全无、有克隆在跑）。
-    /// 用于克隆模式 UI（隐藏权限行、方案名显「BundleID 方案」）。
-    var cloneMode: Bool { activeEngine == .bundleIDClone }
+    /// 终极兜底模式：所有注入方案都不适用（当前判据=App Store 沙盒版，无法注入）→ 只能用 BundleID 克隆。
+    /// 此模式：主按钮变紫「新开一个独立副本」、双开状态显"未生效（BundleID 临时方案）"、
+    /// 隐藏权限行、"已打开的微信"行右侧出"清理全部克隆"。
+    var cloneMode: Bool { appInstalled && signType == .appStore }
     var multiOpenActive: Bool { activeEngine != .none }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
     let selfEngineVersion = "0.9.0"   // 自研引擎随本工具版本
@@ -102,8 +103,10 @@ final class WeChatModel: ObservableObject {
         // .bundleIDClone = 只有克隆在跑、无注入引擎；安装按钮意在装注入引擎 → 当全新安装处理。
         case .none, .bundleIDClone: break
         }
-        // 全新安装：自研引擎优先。
-        installSelfEngine()
+        // 全新安装的推荐链：旧版微信 → WeChatTweak（最早的静态注入）；新版 → 自研引擎（主）。
+        // （X1a0He 作为手动 fallback，通过独立入口选择，不在自动推荐里。）
+        if let b = build, supportedBuilds.contains(b) { patch() }
+        else { installSelfEngine() }
     }
 
     // MARK: - 版本兼容 / 自动下载替换微信

@@ -20,6 +20,7 @@
 "双开插件状态" = "Multi-instance";
 "已可用（%@ 方案）" = "Ready (%@)";
 "不可用" = "Unavailable";
+"未生效（BundleID 临时方案）" = "Off (BundleID fallback)";
 "双开插件版本" = "Plugin version";
 "未安装" = "Not installed";
 "自研引擎" = "Self-built";

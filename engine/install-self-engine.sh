@@ -36,16 +36,29 @@ log() { echo "[install] $*"; }
 APP="${1:-}"
 [ -n "$APP" ] || err "用法: $0 /path/to/WeChat.app"
 [ -d "$APP" ] || err "找不到 app: $APP"
-case "$APP" in
-  /Applications/WeChat.app|/Applications/WeChat.app/*)
-    err "拒绝施工 /Applications/WeChat.app(必须用副本)";;
-esac
-
 LOADER="$APP/Contents/MacOS/WeChat"
 BODY="$APP/Contents/Resources/wechat.dylib"
 FRAMEWORKS="$APP/Contents/Frameworks"
 [ -f "$LOADER" ] || err "缺 loader: $LOADER"
 [ -f "$BODY" ]   || err "缺业务体: $BODY"
+
+############################################
+# 准备干净业务体(可回滚):
+#  - .original 存在(装过 X1a0He/本引擎)→ 备份当前注入版,还原干净体,移走 X1a0He 插件。
+#  - .original 不存在(全新干净)→ 当前体即干净,创建 .original 备份供日后还原。
+# 注:GUI 调用前已退微信;真装 /Applications 在此放行(自主期的硬锁已移除)。
+############################################
+ORIG="$BODY.original"
+if [ -f "$ORIG" ]; then
+  log "检测到 .original → 还原干净业务体(剥离已有注入,叠加会坏)"
+  cp -f "$BODY" "$BODY.prev.bak" 2>/dev/null || true
+  cp -f "$ORIG" "$BODY"
+  [ -f "$FRAMEWORKS/X1a0HeWeChatPlugin.dylib" ] && \
+    mv -f "$FRAMEWORKS/X1a0HeWeChatPlugin.dylib" "$FRAMEWORKS/X1a0HeWeChatPlugin.dylib.bak" 2>/dev/null || true
+else
+  log "未见 .original → 当前体视为干净,创建 .original 备份"
+  cp -f "$BODY" "$ORIG"
+fi
 
 # 现编译引擎(若缺二进制)。
 if [ ! -f "$DYLIB_SRC" ]; then

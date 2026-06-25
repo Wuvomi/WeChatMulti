@@ -7,26 +7,25 @@ struct ContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
 
-            // 主功能：大号"开新微信"按钮
+            // 主按钮：未找到微信→灰(选路径)；终极兜底模式(注入全不适用)→紫(新开独立副本)；否则→绿(新开微信)
             Button(action: {
-                if model.appInstalled { model.openNewInstance() }
-                else { model.chooseWeChatPath() }
+                if !model.appInstalled { model.chooseWeChatPath() }
+                else if model.cloneMode { model.openCloneInstance() }
+                else { model.openNewInstance() }
             }) {
-                Text(model.appInstalled
-                     ? String(localized: "新开一个微信")
-                     : String(localized: "未找到微信 · 点此选择位置"))
+                Text(!model.appInstalled ? String(localized: "未找到微信 · 点此选择位置")
+                     : model.cloneMode ? String(localized: "新开一个独立副本")
+                     : String(localized: "新开一个微信"))
             }
-            .buttonStyle(SolidButton(color: model.appInstalled ? .green : .gray,
-                                     fullWidth: true, minHeight: 46, titleFont: .title3))
+            .buttonStyle(SolidButton(
+                color: !model.appInstalled ? .gray : (model.cloneMode ? .indigo : .green),
+                fullWidth: true, minHeight: 46, titleFont: .title3))
+            .disabled(model.installing)
 
             // 状态 + 权限（合并为一栏，红/绿）
             VStack(spacing: 6) {
-                plain(String(localized: "已打开的微信"), openCountValue)
-                dot(String(localized: "双开插件状态"),
-                    model.multiOpenActive
-                      ? String(localized: "已可用（\(model.engineName) 方案）")
-                      : String(localized: "不可用"),
-                    ok: model.multiOpenActive)
+                openedRow
+                statusRow
                 plain(model.engineRowLabel, model.engineRowValue)
                 plain(String(localized: "当前微信版本"), versionValue)
                 // 克隆兜底模式无注入探针 → 权限行不适用，隐藏。
@@ -74,11 +73,6 @@ struct ContentView: View {
                 .controlSize(.small)
                 .disabled(model.installing)
             }
-
-            Divider().padding(.vertical, 2)
-
-            // bundleID 终极兜底入口（独立于主多开流程，不替换它）。
-            cloneSection
         }
         .padding(12)
         .alert("下载并替换微信", isPresented: Binding(
@@ -121,52 +115,33 @@ struct ContentView: View {
         return String(localized: "\(n) 个")
     }
 
-    // bundleID 终极兜底区：折叠入口 + 展开后的管理（新建/在跑/清理）。
-    @ViewBuilder private var cloneSection: some View {
-        if model.showCloneManager {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("用独立副本多开（终极兜底）").font(.callout).bold()
-                    Spacer()
-                    Button {
-                        withAnimation { model.showCloneManager = false }
-                    } label: { Image(systemName: "chevron.up") }
-                        .buttonStyle(.borderless).controlSize(.small)
-                }
-                Text("独立副本 = 独立登录、与版本无关、永不失效。注入方案失效时仍能多开（代价：各副本独立账号、各占约 1.3GB）。")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                plain(String(localized: "已克隆"),
-                      String(localized: "\(model.existingCloneCount) 个 · 在跑 \(model.runningCloneCount) 个"))
-
-                HStack {
-                    Button(String(localized: "新开一个独立副本")) { model.openCloneInstance() }
-                        .buttonStyle(SolidButton(color: .indigo, minHeight: 30))
-                        .disabled(model.installing)
-                    Spacer(minLength: 8)
-                    Button(String(localized: "清理全部克隆")) { model.cleanupClones() }
-                        .controlSize(.small)
-                        .disabled(model.installing || model.existingCloneCount == 0)
-                }
+    // "已打开的微信"行：值=N（已克隆 X 个）；仅终极兜底模式右侧出"清理全部克隆"按钮。
+    private var openedRow: some View {
+        HStack(spacing: 6) {
+            Text(String(localized: "已打开的微信")).font(.callout).foregroundStyle(.secondary)
+                .frame(width: labelW, alignment: .leading)
+            dotSlot(nil)
+            Text(openCountValue).font(.callout)
+            Spacer()
+            if model.cloneMode {
+                Button(String(localized: "清理全部克隆")) { model.cleanupClones() }
+                    .controlSize(.small)
+                    .disabled(model.installing || model.existingCloneCount == 0)
             }
-            .padding(10)
-            .background(Color.gray.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    // "双开插件状态"行：终极兜底模式=红"未生效（BundleID 临时方案）"；否则按注入引擎红/绿。
+    @ViewBuilder private var statusRow: some View {
+        if model.cloneMode {
+            dot(String(localized: "双开插件状态"),
+                String(localized: "未生效（BundleID 临时方案）"), ok: false)
         } else {
-            Button {
-                withAnimation { model.showCloneManager = true }
-            } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.on.square")
-                    Text("用独立副本多开（终极兜底）")
-                    Spacer()
-                    Image(systemName: "chevron.down")
-                }
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .font(.callout)
+            dot(String(localized: "双开插件状态"),
+                model.multiOpenActive
+                  ? String(localized: "已可用（\(model.engineName) 方案）")
+                  : String(localized: "不可用"),
+                ok: model.multiOpenActive)
         }
     }
 
