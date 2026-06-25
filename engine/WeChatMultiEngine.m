@@ -371,9 +371,13 @@ static void wechat_multi_engine_init(void) {
         // 2) 门③ swizzle(辅助,消 UI 层"已有实例"提示;放行真靠门②)。
         install_gate3_swizzle();
 
-        // 3) 权限探针写 perms.json(异步,避免拖慢启动关键路径)。
+        // 3) 权限探针:周期性写 perms.json(每 3s 重探一次)。
+        //    这样用户中途在系统设置里授/撤全盘权限,GUI 几秒内自动反映,无需重启微信。
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            write_perms_json();
+            for (;;) {
+                write_perms_json();
+                sleep(3);
+            }
         });
     }
 }
