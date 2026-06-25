@@ -137,7 +137,15 @@
 
 ## 当前状态（最近更新：2026-06-25）
 
-- **阶段**：✅ GUI v0.9.0；**核心可用(X1a0He)**；🎉 **自研引擎同路径多开已攻克并实测**(`re/self-engine-v2.md`)；待办：自研引擎接进 GUI、bundleID 兜底坐实
+- **阶段**：✅ GUI v0.9.0；**核心可用(X1a0He)**；🎉 自研引擎同路径多开攻克+已接GUI；🎉 bundleID兜底已坐实(稳定配方+脚本);待办：bundleID接GUI、装机验证(用户在场)
+
+### 🎉 bundleID 终极兜底坐实（2026-06-25 12:5x，`re/clone-verdict.md`）
+- **被杀真凶**：非系统宽限——微信内置 **Crashpad** 启动时 `bootstrap_check_in` mach 名 `5A4RE8SF68.<bundleId>.crashpad.*` 被沙盒 `deny(1100)`→SIGTRAP 自退(exit133)。沙盒只放行【进程自己 application-identifier 的 team 段】为前缀的 mach 名。
+- **稳定配方钥匙**：`com.apple.application-identifier` = **`5A4RE8SF68.com.tencent.xinCloneN`**(保留腾讯 team 前缀、只换 bundle 后缀)→ 放行 Crashpad 不被杀。app-group 同理(各克隆独立 group 容器)。app-sandbox 保留。其余 cs/files/network/mach-lookup 能力位照搬。adhoc 逐文件深→浅签、顶层带 entitlements 最后、不 --deep、清 quarantine。
+- **实测**：克隆 `open -n` 存活 >92s;两克隆并存 95s 双活,各独立容器=真数据隔离。
+- 交付：`engine/install-clone.sh`(纯克隆安装器,入参 N+源app+目标,幂等)、`engine/cleanup-clone.sh`(删 .app+数据容器+group容器)、`re/clone-verdict.md`。
+- **GUI 需知局限**：① 独立容器=独立登录(克隆=独立账号、注入=共享数据);② **清理容器需 FDA**(`~/Library/Containers/<bundle>` 受 TCC 保护,无 FDA 连空目录都删不掉)→ GUI 清理前检测 FDA 并引导授权。
+- **残留**：测试克隆建的 `~/Library/Containers/com.tencent.xinClone1/2/3`(3×36KB 空壳,无数据)受 FDA 保护、autonomous shell 删不掉,留待用户授 FDA 后 `rm -rf` 或访达删。
 
 ### 🎉 自研引擎 v2 — 同路径多开攻克（2026-06-25 12:32，`re/self-engine-v2.md`）
 - **达成**：同一 app 副本 `open -n`/exec 起 **2 实例并存稳定 >70s**(direct-exec + open -n 均验证)，零崩溃。/tmp 副本施工，**/Applications 全程未碰，.original md5 不变，X1a0He 完好**。
