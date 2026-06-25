@@ -45,14 +45,16 @@ final class WeChatModel: ObservableObject {
     @Published var installing = false
     @Published var errorMessage: String?   // 仅真报错时弹窗（用户取消密码框不算）
     @Published var updateMessage: String?  // 检测更新结果（弹窗）
+    @Published var updateAvailable = false  // 有新版本可一键更新
+    private var latestDMGURL: String?       // 新版本 DMG 直链（资产）
 
     static let repoURL = "https://github.com/Wuvomi/WeChatMulti"
     static let releasesAPI = "https://api.github.com/repos/Wuvomi/WeChatMulti/releases/latest"
 
     /// 从 GitHub releases 检测新版本：比对 tag 与本机 CFBundleShortVersionString。
-    /// 仓库未公开时 API 返回 404 → 提示"可能仓库未公开"。
     func checkForUpdate() {
         updateMessage = String(localized: "正在检查更新…")
+        updateAvailable = false
         Task { @MainActor in
             guard let url = URL(string: Self.releasesAPI) else { return }
             do {
@@ -67,13 +69,56 @@ final class WeChatModel: ObservableObject {
                 let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
                 let current = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0"
                 if latest.compare(current, options: .numeric) == .orderedDescending {
-                    updateMessage = String(localized: "发现新版本 \(tag)！前往项目主页下载。")
+                    if let assets = obj["assets"] as? [[String: Any]],
+                       let dmg = assets.first(where: { ($0["name"] as? String)?.hasSuffix(".dmg") == true }),
+                       let durl = dmg["browser_download_url"] as? String {
+                        latestDMGURL = durl
+                        updateAvailable = true
+                    }
+                    updateMessage = String(localized: "发现新版本 \(tag)！可一键更新，或前往主页手动下载。")
                 } else {
                     updateMessage = String(localized: "已是最新版本（\(current)）。")
                 }
             } catch {
                 updateMessage = String(localized: "检查更新失败：\(error.localizedDescription)")
             }
+        }
+    }
+
+    /// 自主更新：下载新版 DMG → 脱离本进程的脚本等本 app 退出后替换并重启。
+    func installUpdate() {
+        guard let dmgURL = latestDMGURL else { return }
+        let appPath = Bundle.main.bundlePath
+        installing = true; updateMessage = nil; updateAvailable = false
+        Task.detached {
+            let tmp = "/tmp/WeChatMulti_update.dmg"
+            let dl = shellRun("/usr/bin/curl", ["-sL", "-m", "600", "-o", tmp, dmgURL])
+            guard dl.status == 0, FileManager.default.fileExists(atPath: tmp) else {
+                await MainActor.run { self.installing = false
+                    self.errorMessage = String(localized: "下载更新失败：\(dl.output)") }
+                return
+            }
+            // 脱离脚本：等本 app 退出 → 挂载 → 替换 .app → 清隔离 → 重启 → 卸载/清理。
+            let script = """
+            #!/bin/bash
+            sleep 1
+            while pgrep -f '\(appPath)/Contents/MacOS/' >/dev/null; do sleep 0.5; done
+            MP=$(hdiutil attach '\(tmp)' -nobrowse 2>/dev/null | grep -oE '/Volumes/[^[:space:]]+' | tail -1)
+            NEW=$(ls -d "$MP"/*.app 2>/dev/null | head -1)
+            if [ -n "$NEW" ]; then
+              rm -rf '\(appPath)'
+              ditto "$NEW" '\(appPath)'
+              xattr -dr com.apple.quarantine '\(appPath)' 2>/dev/null
+              hdiutil detach "$MP" >/dev/null 2>&1
+              open '\(appPath)'
+            fi
+            rm -f '\(tmp)'
+            """
+            let sp = "/tmp/WeChatMulti_update.sh"
+            try? script.write(toFile: sp, atomically: true, encoding: .utf8)
+            _ = shellRun("/bin/chmod", ["+x", sp])
+            _ = shellRun("/bin/bash", ["-c", "nohup /bin/bash '\(sp)' >/dev/null 2>&1 &"])
+            await MainActor.run { NSApp.terminate(nil) }   // 退出自身,让脚本接管替换+重启
         }
     }
 

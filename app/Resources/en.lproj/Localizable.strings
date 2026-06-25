@@ -91,7 +91,9 @@
 "前往主页" = "Open Homepage";
 "正在检查更新…" = "Checking for updates…";
 "检查更新失败（可能仓库尚未公开）。" = "Update check failed (the repo may not be public yet).";
-"发现新版本 %@！前往项目主页下载。" = "New version %@ is available! Download it from the project homepage.";
+"发现新版本 %@！可一键更新，或前往主页手动下载。" = "New version %@ is available! Update now, or download it manually from the homepage.";
+"立即更新" = "Update Now";
+"下载更新失败：%@" = "Update download failed: %@";
 "已是最新版本（%@）。" = "You're on the latest version (%@).";
 "检查更新失败：%@" = "Update check failed: %@";
 "ABOUT_CREDITS" = "Multi-open methods\n· Injection: X1a0He plugin / self-built engine (in progress)\n· Ultimate fallback: BundleID independent copy\n\nOpen-source credits\n· X1a0He/X1a0HeWeChatPlugin — injection multi-open engine\n· sunnyyoung/WeChatTweak-macOS — early byte-patch approach\n· WeChat installer: official Tencent DMG (dldir1v6.qq.com)\n· Release dates: official WeChat changelog / zsbai/wechat-versions\n\nFor study and research only; please follow the applicable terms of service.\ngithub.com/Wuvomi/WeChatMulti";

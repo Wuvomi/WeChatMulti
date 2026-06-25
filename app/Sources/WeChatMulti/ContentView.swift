@@ -94,6 +94,9 @@ struct ContentView: View {
             get: { model.updateMessage != nil },
             set: { if !$0 { model.updateMessage = nil } }
         )) {
+            if model.updateAvailable {
+                Button("立即更新") { model.installUpdate() }
+            }
             Button("前往主页") { model.openRepoPage(); model.updateMessage = nil }
             Button("好", role: .cancel) { model.updateMessage = nil }
         } message: {
