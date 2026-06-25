@@ -137,7 +137,17 @@
 
 ## 当前状态（最近更新：2026-06-25）
 
-- **阶段**：✅ GUI v0.9.0；**核心可用(X1a0He)**；🎉 自研引擎同路径多开攻克+已接GUI；🎉 bundleID兜底已坐实(稳定配方+脚本);待办：bundleID接GUI、装机验证(用户在场)
+- **阶段**：✅ GUI v0.9.0；**三套多开方案全部攻克+集成+文档化**；唯一待办=自研引擎/bundleID 装机验证(需用户在场)
+
+### 🏁 本轮自主循环完成总览（2026-06-25，12:05→约13:2x）
+**三套多开方案全部实现并接进 GUI：**
+1. **X1a0He 注入**（现用、成熟、第三方依赖、共享数据）。
+2. **自研引擎注入**（原创）：攻克微信 4.1.11 真门②=`tbz w20,#0 @vmaddr 0x2117e0`(放行函数内),第二实例运行时 NOP 之放行(flock 判 role,门①静态patch,门③辅助)。**零硬编码偏移(全运行时特征码)、零第三方依赖、含"注入微信自检"权限探针写 perms.json**。`re/self-engine-v2.md` + `re/self-engine-stress.md`：同路径 2 实例 **332s 压测恒稳、零崩溃、无内存泄漏**,达标可用于风控账号(各实例登不同账号)。
+3. **bundleID 克隆终极兜底**（版本无关、永不失效）：攻克被杀真凶=微信 Crashpad mach 名被沙盒 deny→稳定配方=`application-identifier` 保留腾讯 team 前缀只换 bundle 后缀。`re/clone-verdict.md`：克隆 >92s、两克隆并存真数据隔离。`engine/install-clone.sh`+`cleanup-clone.sh`。GUI 已接(尾号复用/双计数/克隆模式/清理FDA门控)。
+**GUI(v0.9.0)：** 中英双语、版本发布日期、权限注入自检(perms.json,已否决工具自身加FDA)、版本守门员(下载替换兼容版)、路径泛用性(灰按钮选.app)、菜单图标6、关于面板致谢、SolidButton。
+**开源：** README.md(中英,三方案对比+技术原理链 re/)、CREDITS.md、MIT LICENSE,均推送 `github.com/Wuvomi/WeChatMulti`(私有)。
+**待用户(在场时)：** ① 装机验证自研引擎(会替换 X1a0He,可逆);② 补 docs/截图;③ 清 3×36KB 空壳容器 `com.tencent.xinClone1/2/3`(受 FDA 保护,`re/clone-verdict.md` 有法)。
+**安全：** 全程仅 /tmp 施工,`/Applications/WeChat.app`(X1a0He)未碰、签名有效、插件在位。
 
 ### 🎉 bundleID 终极兜底坐实（2026-06-25 12:5x，`re/clone-verdict.md`）
 - **被杀真凶**：非系统宽限——微信内置 **Crashpad** 启动时 `bootstrap_check_in` mach 名 `5A4RE8SF68.<bundleId>.crashpad.*` 被沙盒 `deny(1100)`→SIGTRAP 自退(exit133)。沙盒只放行【进程自己 application-identifier 的 team 段】为前缀的 mach 名。
