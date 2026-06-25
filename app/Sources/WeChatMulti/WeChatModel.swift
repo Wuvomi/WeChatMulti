@@ -158,7 +158,7 @@ final class WeChatModel: ObservableObject {
     var cloneMode: Bool { appInstalled && signType == .appStore }
     var multiOpenActive: Bool { activeEngine != .none }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
-    let selfEngineVersion = "0.9.1"   // 自研引擎当前版本(与引擎 .m 的 @"engine" 对齐;有实质改动就同步 bump)
+    let selfEngineVersion = "0.9.2"   // 自研引擎当前版本(与引擎 .m 的 @"engine" 对齐;有实质改动就同步 bump)
 
     /// 已装引擎写在 perms.json 里的版本(旧引擎无此字段 → nil)。
     @Published var installedEngineVersion: String?

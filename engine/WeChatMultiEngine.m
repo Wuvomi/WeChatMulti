@@ -42,6 +42,9 @@
 #import <sys/file.h>
 #import <fcntl.h>
 #import <sys/stat.h>
+#import <dirent.h>
+#import <pwd.h>
+#import <errno.h>
 
 // CGPreflightScreenCaptureAccess 在部分 SDK header 里没有声明,手动声明。
 extern bool CGPreflightScreenCaptureAccess(void) __attribute__((weak_import));
@@ -116,26 +119,64 @@ static BOOL probe_screen_capture(void) {
     return NO;
 }
 
-// 试读一个 FDA(全盘访问)保护路径来判断是否拥有完全磁盘访问权限。
-// TCC.db 仅在拥有 FDA 时可读;读不到则视为无 FDA。
-static BOOL probe_full_disk_access(void) {
-    static const char *fda_probes[] = {
-        "/Library/Application Support/com.apple.TCC/TCC.db",
-        "/Users/Shared/.fda_probe_nonexistent", // 占位,真正判定靠下面的 TCC.db
-        NULL,
-    };
-    // 主判据:能否打开并读取 TCC.db。沙盒进程通常被挡;有 FDA 例外时可读。
-    const char *p = fda_probes[0];
-    FILE *f = fopen(p, "rb");
-    if (f) {
-        unsigned char buf[16];
-        size_t n = fread(buf, 1, sizeof(buf), f);
-        fclose(f);
-        // SQLite 文件头 "SQLite format 3\0";能读到任意字节即说明有访问权。
-        if (n > 0) {
-            return YES;
-        }
+// 取真实用户 home(不是沙盒容器 home)。getpwuid 在沙盒里仍返回真实 home,
+// 而 NSHomeDirectory()/$HOME 会被重定向到容器,拿不到 ~/Library/Safari 真实路径。
+static const char *real_user_home(void) {
+    const char *h = NULL;
+    struct passwd *pw = getpwuid(getuid());
+    if (pw && pw->pw_dir && pw->pw_dir[0]) h = pw->pw_dir;
+    return h;
+}
+
+// 判定是否拥有"完全磁盘访问"(FDA / kTCCServiceSystemPolicyAllFiles)。
+//
+// 设计取舍(详见 re/probe-hardening.md):
+//   旧实现直接 fopen 系统 TCC 数据库 /Library/.../TCC.db 判 FDA。这是典型隐私探测
+//   特征:沙盒进程触碰 TCC.db 会被 sandboxd 记成越界,语义上"读权限数据库"极可疑,
+//   易被风控/EDR 命中。
+//
+//   改为探测一个"受 FDA 保护、语义无害、且 macOS 上基本 always 存在"的目录:
+//   用户 ~/Library/Safari。理由:
+//     - 它受 TCC 保护(kTCCServiceSystemPolicyAllFiles):无 FDA 的沙盒进程访问被拒,
+//       拥有 FDA 时放行——与 TCC.db 同样能区分"有/无 FDA"。
+//     - 语义无害:仅 opendir 列目录句柄,不读 Safari 任何内容,也不碰任何权限库。
+//     - 几乎所有 macOS 用户态机器都自带 Safari,该目录稳定存在。
+//   判定:opendir 成功 → 有 FDA;EPERM/EACCES(TCC 拒)→ 无 FDA。
+//   注意 macOS 上 TCC 拒绝多体现为 EPERM(errno=1),也兼容 EACCES。
+//
+//   稳健性:若 Safari 目录因极端环境缺失(ENOENT),回退探测 ~/Library/Mail 目录
+//   (同受 FDA 保护)。两者皆不可达且非权限拒绝时,保守返回 NO(无 FDA)。
+static int fda_probe_dir(const char *path) {
+    // 返回 1=可访问(有 FDA 迹象), 0=被 TCC 拒(无 FDA), -1=不存在/无法判定
+    DIR *d = opendir(path);
+    if (d) {
+        closedir(d);
+        return 1;
     }
+    int e = errno;
+    if (e == EPERM || e == EACCES) return 0; // TCC 拒绝 → 无 FDA
+    return -1; // ENOENT 等 → 该候选不可用,交给下一个
+}
+
+static BOOL probe_full_disk_access(void) {
+    const char *home = real_user_home();
+    if (!home) return NO;
+
+    char path[PATH_MAX];
+
+    // 候选 1:~/Library/Safari(首选,无害且稳定)
+    snprintf(path, sizeof(path), "%s/Library/Safari", home);
+    int r = fda_probe_dir(path);
+    if (r == 1) return YES;
+    if (r == 0) return NO;
+
+    // 候选 2 回退:~/Library/Mail(同受 FDA 保护)
+    snprintf(path, sizeof(path), "%s/Library/Mail", home);
+    r = fda_probe_dir(path);
+    if (r == 1) return YES;
+    if (r == 0) return NO;
+
+    // 两候选均不存在/无法判定:保守按无 FDA。
     return NO;
 }
 
@@ -157,7 +198,7 @@ static void write_perms_json(void) {
         NSDictionary *payload = @{
             @"screen": @(screen),
             @"fda": @(fda),
-            @"engine": @"0.9.1",
+            @"engine": @"0.9.2",
             @"pid": @(getpid()),
             @"updated": @([[NSDate date] timeIntervalSince1970]),
         };
@@ -374,12 +415,25 @@ static void wechat_multi_engine_init(void) {
         // 2) 门③ swizzle(辅助,消 UI 层"已有实例"提示;放行真靠门②)。
         install_gate3_swizzle();
 
-        // 3) 权限探针:周期性写 perms.json(每 3s 重探一次)。
-        //    这样用户中途在系统设置里授/撤全盘权限,GUI 几秒内自动反映,无需重启微信。
+        // 3) 权限探针:自适应节奏写 perms.json。
+        //    旧实现固定每 3s(每小时上千次),探测过密,叠加越界读 TCC.db,极易被
+        //    风控判成"异常探测行为"。新节奏(详见 re/probe-hardening.md):
+        //      - 启动后头 ~90s:每 10s 一次(捕捉"用户刚在系统设置里授权"的窗口)。
+        //      - 之后退避到稳态:每 45s 一次。
+        //    FDA 变化最坏 ~45s 内反映到 GUI(实际授权多发生在启动初期密采窗口,
+        //    那时 ~10s 内即可反映)。探测频率较旧实现降一个数量级以上
+        //    (旧 ~1200 次/小时 → 新 ~80 次/小时)。
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            const int kFastIntervalSec  = 10;   // 启动初期密采间隔
+            const int kFastWindowSec    = 90;   // 密采窗口时长
+            const int kSlowIntervalSec  = 45;   // 稳态间隔
+            int elapsed = 0;
             for (;;) {
                 write_perms_json();
-                sleep(3);
+                int interval = (elapsed < kFastWindowSec) ? kFastIntervalSec
+                                                          : kSlowIntervalSec;
+                sleep((unsigned)interval);
+                elapsed += interval;
             }
         });
     }

@@ -47,8 +47,8 @@ cat > "$APP/Contents/Info.plist" <<'EOF'
     <string>en</string>
   </array>
   <key>CFBundleIdentifier</key><string>com.will.wechatmulti</string>
-  <key>CFBundleVersion</key><string>32</string>
-  <key>CFBundleShortVersionString</key><string>0.9.1</string>
+  <key>CFBundleVersion</key><string>33</string>
+  <key>CFBundleShortVersionString</key><string>0.9.2</string>
   <key>CFBundleExecutable</key><string>WeChatMulti</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
