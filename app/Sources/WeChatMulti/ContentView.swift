@@ -54,9 +54,7 @@ struct ContentView: View {
                     if model.needsDownload { model.showDownloadConfirm = true }
                     else { model.installBestEngine() }
                 }
-                .buttonStyle(SolidButton(
-                    color: model.needsDownload ? .blue : (model.multiOpenActive ? .red : .blue),
-                    minHeight: 30))
+                .buttonStyle(SolidButton(color: installButtonColor, minHeight: 30))
                 .disabled(model.installing)
             }
         }
@@ -114,6 +112,12 @@ struct ContentView: View {
         if !model.appInstalled { return .gray }
         return model.cloneMode ? .indigo : .green
     }
+    // 安装按钮色：下载=蓝；引擎过时=橙(醒目引导更新)；已生效=红(重装)；未装=蓝。
+    private var installButtonColor: Color {
+        if model.needsDownload { return .blue }
+        if model.engineOutdated { return .orange }
+        return model.multiOpenActive ? .red : .blue
+    }
 
     // "已打开的微信"右值：N（已克隆 X 个）。N=在跑实例总数；X=已存在克隆总数。X>0 才显括号。
     private var openCountValue: String {
@@ -140,13 +144,21 @@ struct ContentView: View {
         }
     }
 
-    // "双开插件状态"行：终极兜底=红"未生效（BundleID 临时方案）"；自研引擎不带"方案"二字；其它带。
+    // "双开插件状态"行：终极兜底=红；引擎过时=橙"引擎需更新"；自研引擎不带"方案"；其它带。
     @ViewBuilder private var statusRow: some View {
         if model.cloneMode {
             dot(String(localized: "双开插件状态"),
                 String(localized: "未生效（BundleID 临时方案）"), ok: false)
         } else if !model.multiOpenActive {
             dot(String(localized: "双开插件状态"), String(localized: "不可用"), ok: false)
+        } else if model.engineOutdated {
+            HStack(spacing: 6) {
+                Text(String(localized: "双开插件状态")).font(.callout).foregroundStyle(.secondary)
+                    .frame(width: labelW, alignment: .leading)
+                dotSlot(.orange)
+                Text(String(localized: "引擎需更新（请点下方更新）")).font(.callout).foregroundStyle(.orange)
+                Spacer()
+            }
         } else if model.activeEngine == .ourOwn {
             dot(String(localized: "双开插件状态"), String(localized: "已可用（自研引擎）"), ok: true)
         } else {
@@ -169,6 +181,7 @@ struct ContentView: View {
     private var buttonLabel: String {
         if model.installing { return String(localized: "处理中…") }
         if model.needsDownload { return String(localized: "下载并替换为兼容版微信") }
+        if model.engineOutdated { return String(localized: "更新双开引擎") }
         return model.multiOpenActive
             ? String(localized: "重新安装双开插件")
             : String(localized: "安装双开插件")

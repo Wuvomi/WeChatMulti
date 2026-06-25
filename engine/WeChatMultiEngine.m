@@ -152,9 +152,12 @@ static void write_perms_json(void) {
                            attributes:nil error:&err];
         }
 
+        // engine 版本:GUI 据此判断装的是否旧引擎(旧引擎无此字段)→ 引导更新。
+        // 每次引擎二进制有实质改动(探针/门逻辑等)就 bump,与 app selfEngineVersion 对齐。
         NSDictionary *payload = @{
             @"screen": @(screen),
             @"fda": @(fda),
+            @"engine": @"0.9.1",
             @"pid": @(getpid()),
             @"updated": @([[NSDate date] timeIntervalSince1970]),
         };

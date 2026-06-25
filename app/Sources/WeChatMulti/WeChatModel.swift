@@ -158,7 +158,16 @@ final class WeChatModel: ObservableObject {
     var cloneMode: Bool { appInstalled && signType == .appStore }
     var multiOpenActive: Bool { activeEngine != .none }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
-    let selfEngineVersion = "0.9.0"   // 自研引擎随本工具版本
+    let selfEngineVersion = "0.9.1"   // 自研引擎当前版本(与引擎 .m 的 @"engine" 对齐;有实质改动就同步 bump)
+
+    /// 已装引擎写在 perms.json 里的版本(旧引擎无此字段 → nil)。
+    @Published var installedEngineVersion: String?
+    /// 引擎过时:已装自研引擎,但其版本缺失或低于当前 → 需更新(GUI 显"引擎需更新"+引导重装)。
+    var engineOutdated: Bool {
+        guard ourEngineInstalled, permsReadable else { return false }  // perms 没读到=未知,不误判
+        guard let v = installedEngineVersion else { return true }       // perms 有但无 engine 字段=旧引擎
+        return v.compare(selfEngineVersion, options: .numeric) == .orderedAscending
+    }
 
     /// 插件版本行：左灰标签固定"插件版本"，右值=版本号（方案名只在双开状态行显示）
     var engineRowLabel: String { String(localized: "双开插件版本") }
@@ -490,10 +499,11 @@ final class WeChatModel: ObservableObject {
         guard ourEngineInstalled,
               let data = FileManager.default.contents(atPath: permsJSONPath),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { permsReadable = false; fdaOK = false; screenOK = false; return }
+        else { permsReadable = false; fdaOK = false; screenOK = false; installedEngineVersion = nil; return }
         permsReadable = true
         fdaOK = (obj["fda"] as? Bool) ?? false
         screenOK = (obj["screen"] as? Bool) ?? false
+        installedEngineVersion = obj["engine"] as? String   // 旧引擎无此字段 → nil → 判过时
     }
 
     private func readVersion() {
