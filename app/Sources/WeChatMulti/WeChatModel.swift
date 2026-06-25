@@ -38,20 +38,24 @@ final class WeChatModel: ObservableObject {
     @Published var engineVersion: String?
     @Published var fdaOK = false
     @Published var screenOK = false
-    @Published var permsReadable = false   // 能否读到 TCC.db（本工具需有全盘访问才能读）
+    @Published var permsReadable = false   // 能否读到权限（自研引擎在场时读容器内 perms.json）
     @Published var x1a0heInstalled = false
     @Published var x1a0heMultiOpenOn = false
+    @Published var ourEngineInstalled = false   // 自研引擎是否已装入当前微信
     @Published var installing = false
     @Published var errorMessage: String?   // 仅真报错时弹窗（用户取消密码框不算）
 
-    enum Engine { case none, weChatTweak, x1a0he }
+    enum Engine { case none, weChatTweak, x1a0he, ourOwn }
+    /// 检测优先级：自研引擎 > X1a0He > WeChatTweak（谁真装了显示谁）。
     var activeEngine: Engine {
+        if ourEngineInstalled { return .ourOwn }
         if x1a0heInstalled && x1a0heMultiOpenOn { return .x1a0he }
         if isPatched { return .weChatTweak }
         return .none
     }
     var engineName: String {
         switch activeEngine {
+        case .ourOwn: return String(localized: "自研引擎")
         case .x1a0he: return "X1a0He"           // 品牌名，不翻译
         case .weChatTweak: return "WeChatTweak" // 品牌名，不翻译
         case .none: return ""
@@ -59,25 +63,32 @@ final class WeChatModel: ObservableObject {
     }
     var multiOpenActive: Bool { activeEngine != .none }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
+    let selfEngineVersion = "0.9.0"   // 自研引擎随本工具版本
 
     /// 插件版本行：左灰标签固定"插件版本"，右值=版本号（方案名只在双开状态行显示）
     var engineRowLabel: String { String(localized: "双开插件版本") }
     var engineRowValue: String {
         switch activeEngine {
+        case .ourOwn: return selfEngineVersion
         case .x1a0he: return x1a0heVersion
         case .weChatTweak: return engineVersion ?? "?"
         case .none: return String(localized: "未安装")
         }
     }
 
-    /// 自动按当前微信版本选最合适的引擎并应用：老版(在 WeChatTweak 支持表内)→byte-patch；否则→X1a0He 注入
+    /// 没装任何引擎时的默认动作：优先自研引擎（实验），失败/不适用再回退老链路。
+    /// 注意：已装 X1a0He 时此方法不会被当作"替换"入口（UI 在已装时走 reinstall 同款方案，
+    /// 改用自研引擎是独立的次级动作 switchToSelfEngine()，避免误替换用户在用的 X1a0He）。
     func installBestEngine() {
-        guard let b = build else { errorMessage = String(localized: "未检测到微信版本"); return }
-        if supportedBuilds.contains(b) {
-            patch()
-        } else {
-            installX1a0He()
+        // 已装某引擎 → 维持同款方案重装，不擅自切换。
+        switch activeEngine {
+        case .ourOwn:  installSelfEngine(); return
+        case .x1a0he:  installX1a0He();     return
+        case .weChatTweak: patch();         return
+        case .none: break
         }
+        // 全新安装：自研引擎优先。
+        installSelfEngine()
     }
 
     // MARK: - 版本兼容 / 自动下载替换微信
@@ -181,6 +192,7 @@ final class WeChatModel: ObservableObject {
         readVersion()
         readSign()
         readEngineVersion()
+        detectSelfEngine()
         detectX1a0He()
         countInstances()
         checkPermissions()
@@ -223,22 +235,21 @@ final class WeChatModel: ObservableObject {
         }
     }
 
-    /// 读系统 TCC.db 判断微信是否已授权（本工具需有全盘访问才能读到 → 否则 permsReadable=false）
+    /// 自研引擎在场时：注入探针把微信自己的授权态（屏幕录制 / 全盘访问）写到容器内 perms.json，
+    /// GUI 直接读它判断 fdaOK / screenOK（不再用"工具自身加 FDA 读 TCC.db"那套——已否决）。
+    /// 读不到（没装自研引擎 / 探针还没写）→ permsReadable=false，UI 走 fallback（只显"去设置"）。
+    private var permsJSONPath: String {
+        let home = NSHomeDirectory()
+        return home + "/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/WeChatMulti/perms.json"
+    }
     private func checkPermissions() {
-        let db = "/Library/Application Support/com.apple.TCC/TCC.db"
-        let r = shellRun("/usr/bin/sqlite3", ["-readonly", db,
-            "SELECT service,auth_value FROM access WHERE client='com.tencent.xinWeChat';"])
-        guard r.status == 0 else { permsReadable = false; fdaOK = false; screenOK = false; return }
+        guard ourEngineInstalled,
+              let data = FileManager.default.contents(atPath: permsJSONPath),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { permsReadable = false; fdaOK = false; screenOK = false; return }
         permsReadable = true
-        var fda = false, scr = false
-        for line in r.output.split(separator: "\n") {
-            let p = line.split(separator: "|")
-            guard p.count >= 2 else { continue }
-            let val = Int(p[1].trimmingCharacters(in: .whitespaces)) ?? 0
-            if p[0].contains("AllFiles") { fda = val >= 2 }
-            if p[0].contains("ScreenCapture") { scr = val >= 2 }
-        }
-        fdaOK = fda; screenOK = scr
+        fdaOK = (obj["fda"] as? Bool) ?? false
+        screenOK = (obj["screen"] as? Bool) ?? false
     }
 
     private func readVersion() {
@@ -379,6 +390,22 @@ final class WeChatModel: ObservableObject {
         }
     }
 
+    /// 检测自研引擎是否已装入当前微信副本：
+    ///   1) Contents/Frameworks/WeChatMultiEngine.dylib 存在；
+    ///   2) 业务体 wechat.dylib 的 mach-o 含指向 WeChatMultiEngine.dylib 的 LC_LOAD_DYLIB。
+    /// 两者皆满足才判定已装（避免只拷了 dylib、没注入也算）。
+    private func detectSelfEngine() {
+        let dylib = appPath + "/Contents/Frameworks/WeChatMultiEngine.dylib"
+        let body  = appPath + "/Contents/Resources/wechat.dylib"
+        guard FileManager.default.fileExists(atPath: dylib),
+              FileManager.default.fileExists(atPath: body) else {
+            ourEngineInstalled = false; return
+        }
+        // 读业务体的 LC_LOAD_DYLIB（otool -l），确认注入了 WeChatMultiEngine.dylib。
+        let r = shellRun("/usr/bin/otool", ["-l", body])
+        ourEngineInstalled = r.status == 0 && r.output.contains("WeChatMultiEngine.dylib")
+    }
+
     private func detectX1a0He() {
         x1a0heInstalled =
             FileManager.default.fileExists(atPath: appPath + "/Contents/Resources/wechat.dylib.original")
@@ -429,6 +456,37 @@ final class WeChatModel: ObservableObject {
             }
         }
     }
+
+    /// 用内置 Resources/engine/install-self-engine.sh 对当前微信副本就地施工（门①静态 patch +
+    /// 引擎注入 + adhoc 重签），装后去隔离属性防 AppTranslocation。经管理员权限（弹原生密码框）。
+    /// 脚本拒绝施工 /Applications/WeChat.app —— 仅对副本生效；本工具不在场自动调用它。
+    func installSelfEngine() {
+        guard appInstalled else { errorMessage = String(localized: "未检测到微信"); return }
+        guard let dir = Bundle.main.resourcePath.map({ $0 + "/engine" }),
+              FileManager.default.fileExists(atPath: dir + "/install-self-engine.sh") else {
+            errorMessage = String(localized: "未找到内置自研引擎"); return
+        }
+        let app = appPath
+        installing = true
+        Task.detached {
+            _ = shellRun("/usr/bin/osascript", ["-e", "tell application \"WeChat\" to quit"])
+            _ = shellRun("/usr/bin/pkill", ["-f", "WeChat.app/Contents/MacOS"])
+            // 安装脚本 + 去隔离，一次管理员密码内完成。路径用单引号包好。
+            let inner = "/bin/bash '\(dir)/install-self-engine.sh' '\(app)' && /usr/bin/xattr -dr com.apple.quarantine '\(app)'"
+            let script = "do shell script \"\(inner.replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
+            let r = shellRun("/usr/bin/osascript", ["-e", script])
+            let cancelled = r.output.contains("-128") || r.output.contains("用户已取消")
+            await MainActor.run {
+                self.installing = false
+                if r.status != 0 && !cancelled { self.errorMessage = r.output }
+                self.refresh()
+            }
+        }
+    }
+
+    /// 次级动作：已装 X1a0He 时，用户主动"改用自研引擎（实验）"。与默认安装入口区分，
+    /// 避免一键安装误把用户在用的 X1a0He 替换掉。施工本身同 installSelfEngine()。
+    func switchToSelfEngine() { installSelfEngine() }
 
     func openFullDiskAccessSettings() {
         openURL("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")

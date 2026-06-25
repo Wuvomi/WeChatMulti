@@ -20,6 +20,16 @@ for lproj in zh-Hans.lproj en.lproj; do
   [ -d "Resources/$lproj" ] && cp -R "Resources/$lproj" "$APP/Contents/Resources/$lproj"
 done
 
+# 自研多开引擎资产（安装脚本 + dylib + 注入/定位脚本），供 GUI 调用 installSelfEngine()
+ENGINE_SRC="../engine"
+if [ -d "$ENGINE_SRC" ]; then
+  mkdir -p "$APP/Contents/Resources/engine"
+  for f in install-self-engine.sh WeChatMultiEngine.dylib insert_dylib.py locate_gate1.py; do
+    [ -f "$ENGINE_SRC/$f" ] && cp "$ENGINE_SRC/$f" "$APP/Contents/Resources/engine/$f"
+  done
+  chmod +x "$APP/Contents/Resources/engine/install-self-engine.sh" 2>/dev/null || true
+fi
+
 cat > "$APP/Contents/Info.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

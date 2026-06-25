@@ -63,6 +63,17 @@ struct ContentView: View {
                     minHeight: 30))
                 .disabled(model.installing)
             }
+
+            // 已装 X1a0He → 保持显示/行为不变，仅给一个独立的次级入口"改用自研引擎（实验）"。
+            // 不会自动替换；点了才施工，措辞标明实验、是用户主动选择。
+            if model.activeEngine == .x1a0he && !model.needsDownload {
+                Button(String(localized: "改用自研引擎（实验）")) {
+                    model.switchToSelfEngine()
+                }
+                .buttonStyle(.link)
+                .controlSize(.small)
+                .disabled(model.installing)
+            }
         }
         .padding(12)
         .alert("下载并替换微信", isPresented: Binding(

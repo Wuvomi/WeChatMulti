@@ -22,6 +22,7 @@
 "不可用" = "Unavailable";
 "双开插件版本" = "Plugin version";
 "未安装" = "Not installed";
+"自研引擎" = "Self-built";
 "当前微信版本" = "WeChat version";
 "发布于 %@" = "released %@";
 "全盘访问权限" = "Full Disk Access";
@@ -38,6 +39,7 @@
 "下载并替换为兼容版微信" = "Download & Replace with a Compatible WeChat";
 "重新安装双开插件" = "Reinstall Multi-instance Plugin";
 "安装双开插件" = "Install Multi-instance Plugin";
+"改用自研引擎（实验）" = "Switch to self-built engine (experimental)";
 
 /* Alert — download & replace */
 "下载并替换微信" = "Download & Replace WeChat";
@@ -61,6 +63,7 @@
 "下载失败：%@" = "Download failed: %@";
 "安装失败：%@" = "Installation failed: %@";
 "未找到内置 X1a0He 安装包" = "The bundled X1a0He installer package wasn't found.";
+"未找到内置自研引擎" = "The bundled self-built engine wasn't found.";
 
 /* About panel */
 "关于 微信多开工具" = "About WeChat Multi";
