@@ -51,6 +51,12 @@ struct ContentView: View {
                 Toggle("在顶部菜单栏显示图标", isOn: $showMenuBarIcon)
                     .toggleStyle(.checkbox).controlSize(.small).font(.callout)
                 Spacer(minLength: 10)
+                // 装了注入引擎(自研/X1a0He/WeChatTweak)→ 给红色「卸载」(还原微信为正常无多开)。
+                if model.multiOpenActive && model.activeEngine != .bundleIDClone {
+                    Button(String(localized: "卸载")) { model.uninstallEngine() }
+                        .buttonStyle(SolidButton(color: .red, minHeight: 30))
+                        .disabled(model.installing)
+                }
                 if showActionButton {
                     Button(buttonLabel) {
                         if model.needsDownload { model.showDownloadConfirm = true }
@@ -132,7 +138,7 @@ struct ContentView: View {
     private var schemeValue: String {
         let n = model.currentSchemeNumber
         if n == 0 { return String(localized: "共 \(model.totalSchemes) 个 · 暂未启用") }
-        return String(localized: "共 \(model.totalSchemes) 个 · 当前方案 \(n)")
+        return String(localized: "共 \(model.totalSchemes) 个 · 当前方案 \(n) · \(model.currentSchemeTech)")
     }
 
     // "已打开的微信"右值：N（已克隆 X 个）。N=在跑实例总数；X=已存在克隆总数。X>0 才显括号。

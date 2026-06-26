@@ -104,3 +104,12 @@
 "已是最新版本（%@）。" = "You're on the latest version (%@).";
 "检查更新失败：%@" = "Update check failed: %@";
 "ABOUT_CREDITS" = "Multi-open methods\n· Injection: X1a0He plugin / self-built engine (in progress)\n· Ultimate fallback: BundleID independent copy\n\nOpen-source credits\n· X1a0He/X1a0HeWeChatPlugin — injection multi-open engine\n· sunnyyoung/WeChatTweak-macOS — early byte-patch approach\n· WeChat installer: official Tencent DMG (dldir1v6.qq.com)\n· Release dates: official WeChat changelog / zsbai/wechat-versions\n\nFor study and research only; please follow the applicable terms of service.\ngithub.com/Wuvomi/WeChatMulti";
+
+/* 卸载 + 方案技术名词 */
+"卸载" = "Uninstall";
+"未找到内置卸载脚本" = "The bundled uninstall script wasn't found.";
+"共 %lld 个 · 当前方案 %lld · %@" = "%1$lld total · current #%2$lld · %3$@";
+"静态注入" = "Static injection";
+"动态注入" = "Dynamic injection";
+"运行时注入" = "Runtime injection";
+"BundleID 克隆" = "BundleID clone";

@@ -169,6 +169,16 @@ final class WeChatModel: ObservableObject {
         case .none:          return 0
         }
     }
+    /// 当前方案的技术名词(配在"当前方案 N"后面)。
+    var currentSchemeTech: String {
+        switch activeEngine {
+        case .weChatTweak:   return String(localized: "静态注入")   // 字节补丁
+        case .x1a0he:        return String(localized: "动态注入")   // dylib 注入 + Dobby hook
+        case .ourOwn:        return String(localized: "运行时注入") // 特征码定位 + 运行时补丁 + 注入
+        case .bundleIDClone: return String(localized: "BundleID 克隆")
+        case .none:          return ""
+        }
+    }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
     let selfEngineVersion = "0.9.2"   // 自研引擎当前版本(与引擎 .m 的 @"engine" 对齐;有实质改动就同步 bump)
 
@@ -774,6 +784,30 @@ final class WeChatModel: ObservableObject {
     /// 次级动作：已装 X1a0He 时，用户主动"改用自研引擎（实验）"。与默认安装入口区分，
     /// 避免一键安装误把用户在用的 X1a0He 替换掉。施工本身同 installSelfEngine()。
     func switchToSelfEngine() { installSelfEngine() }
+
+    /// 卸载多开引擎,把微信还原为正常(无多开)。退微信 → 跑 uninstall 脚本(管理员)→ 清隔离。
+    func uninstallEngine() {
+        guard appInstalled else { errorMessage = String(localized: "未检测到微信"); return }
+        guard let dir = Bundle.main.resourcePath.map({ $0 + "/engine" }),
+              FileManager.default.fileExists(atPath: dir + "/uninstall-self-engine.sh") else {
+            errorMessage = String(localized: "未找到内置卸载脚本"); return
+        }
+        let app = appPath
+        installing = true
+        Task.detached {
+            _ = shellRun("/usr/bin/osascript", ["-e", "tell application \"WeChat\" to quit"])
+            _ = shellRun("/usr/bin/pkill", ["-f", "WeChat.app/Contents/MacOS"])
+            let inner = "/bin/bash '\(dir)/uninstall-self-engine.sh' '\(app)'"
+            let script = "do shell script \"\(inner.replacingOccurrences(of: "\"", with: "\\\""))\" with administrator privileges"
+            let r = shellRun("/usr/bin/osascript", ["-e", script])
+            let cancelled = r.output.contains("-128") || r.output.contains("用户已取消")
+            await MainActor.run {
+                self.installing = false
+                if r.status != 0 && !cancelled { self.errorMessage = r.output }
+                self.refresh()
+            }
+        }
+    }
 
     func openFullDiskAccessSettings() {
         openURL("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
