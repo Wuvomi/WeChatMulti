@@ -113,3 +113,7 @@
 "动态注入" = "Dynamic injection";
 "运行时注入" = "Runtime injection";
 "BundleID 克隆" = "BundleID clone";
+
+/* 卸载引擎 + FDA 提示隐藏 */
+"卸载双开引擎" = "Uninstall Multi-open Engine";
+"✓ 已设置好，隐藏此提示" = "✓ Done, hide this notice";

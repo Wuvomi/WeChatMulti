@@ -26,9 +26,8 @@ struct ContentView: View {
                 statusRow
                 plain(model.engineRowLabel, model.engineRowValue)
                 plain(String(localized: "当前微信版本"), versionValue)
-                // 克隆兜底模式无注入探针 → 权限行不适用，隐藏。
-                // 否则：检测到全盘权限正常 → 整行隐藏(精简)；检测不到/未授权 → 显示(fallback)。
-                if !model.cloneMode && !(model.permsFresh && model.fdaOK) {
+                // 克隆兜底无探针→隐藏；检测到FDA正常 或 用户手动确认已设置→隐藏(整洁)；否则显示。
+                if showFDASection {
                     fdaRow()
                 }
             }
@@ -41,25 +40,24 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 
-            if !model.cloneMode && !(model.permsFresh && model.fdaOK) {
-                Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
-                    .font(.caption).foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
+            if showFDASection {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
+                        .font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button(String(localized: "✓ 已设置好，隐藏此提示")) { model.fdaNoticeDismissed = true }
+                        .buttonStyle(.link).controlSize(.small).font(.caption)
+                }
             }
 
             HStack {
                 Toggle("在顶部菜单栏显示图标", isOn: $showMenuBarIcon)
                     .toggleStyle(.checkbox).controlSize(.small).font(.callout)
                 Spacer(minLength: 10)
-                // 装了注入引擎(自研/X1a0He/WeChatTweak)→ 给红色「卸载」(还原微信为正常无多开)。
-                if model.multiOpenActive && model.activeEngine != .bundleIDClone {
-                    Button(String(localized: "卸载")) { model.uninstallEngine() }
-                        .buttonStyle(SolidButton(color: .red, minHeight: 30))
-                        .disabled(model.installing)
-                }
                 if showActionButton {
                     Button(buttonLabel) {
                         if model.needsDownload { model.showDownloadConfirm = true }
+                        else if model.multiOpenActive && !model.engineOutdated { model.uninstallEngine() }
                         else { model.installBestEngine() }
                     }
                     .buttonStyle(SolidButton(color: installButtonColor, minHeight: 30))
@@ -127,7 +125,12 @@ struct ContentView: View {
     private var mainButtonDisabled: Bool {
         model.installing || (model.appInstalled && !model.multiOpenActive && !model.cloneMode)
     }
-    // 安装按钮色：下载=蓝；引擎过时=橙(醒目引导更新)；已生效=红(重装)；未装=蓝。
+    // FDA 区(权限行+橙提示)是否显示:克隆模式无探针不显;检测到FDA正常 或 用户手动"已设置"→ 隐藏(整洁)。
+    private var showFDASection: Bool {
+        !model.cloneMode && !(model.permsFresh && model.fdaOK) && !model.fdaNoticeDismissed
+    }
+
+    // 安装按钮色：下载=蓝；引擎过时=橙(醒目引导更新)；已生效=红(卸载)；未装=蓝。
     private var installButtonColor: Color {
         if model.needsDownload { return .blue }
         if model.engineOutdated { return .orange }
@@ -202,14 +205,18 @@ struct ContentView: View {
 
     // 底部动作按钮：仅在"有事可做"时显示——版本搞不定→下载换版本；引擎过时→更新；未装→安装。
     // 一切正常工作时不显示(去掉无意义的"重新安装")。
+    // 底部按钮：装了微信就显示(总有动作);纯BundleID克隆兜底模式下无装/卸动作(清理在行内)→隐藏。
     private var showActionButton: Bool {
-        model.installing || model.needsDownload || model.engineOutdated || !model.multiOpenActive
+        guard model.appInstalled else { return false }
+        return model.needsDownload || model.activeEngine != .bundleIDClone
     }
+    // 文案随状态:处理中/下载换版本/更新引擎/卸载引擎(装好且正常)/安装引擎(未装)。
     private var buttonLabel: String {
-        if model.installing { return String(localized: "正在安装…") }
+        if model.installing { return String(localized: "处理中…") }
         if model.needsDownload { return String(localized: "下载并替换为兼容版微信") }
         if model.engineOutdated { return String(localized: "更新双开引擎") }
-        return String(localized: "安装双开引擎")   // 未装任何方案
+        if model.multiOpenActive { return String(localized: "卸载双开引擎") }   // 装好且正常 → 卸载
+        return String(localized: "安装双开引擎")   // 未装
     }
 
     // 英文标签更长 → 加宽标签列(利用右边空白)；中文保持 84 不变
