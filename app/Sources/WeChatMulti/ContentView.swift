@@ -21,12 +21,17 @@ struct ContentView: View {
 
             // 状态 + 权限（合并为一栏，红/绿）
             VStack(spacing: 6) {
-                openedRow
-                plain(String(localized: "双开方案数量"), schemeValue)
+                // 没装任何引擎时只留"双开插件状态(不可用)",其余全隐藏(整洁)；装了才显示完整状态。
+                if showFullPanel {
+                    openedRow
+                    plain(String(localized: "双开方案数量"), schemeValue)
+                }
                 statusRow
-                plain(model.engineRowLabel, model.engineRowValue)
-                plain(String(localized: "当前微信版本"), versionValue)
-                // 克隆兜底无探针→隐藏；检测到FDA正常 或 用户手动确认已设置→隐藏(整洁)；否则显示。
+                if showFullPanel {
+                    plain(model.engineRowLabel, model.engineRowValue)
+                    plain(String(localized: "当前微信版本"), versionValue)
+                }
+                // FDA 提示只在注入引擎已装时显示(装前微信不会弹"访问其他App"弹窗,不必提示)。
                 if showFDASection {
                     fdaRow()
                 }
@@ -41,18 +46,19 @@ struct ContentView: View {
             }
 
             if showFDASection {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
-                        .font(.caption).foregroundStyle(.orange)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Button(String(localized: "✓ 已设置好，隐藏此提示")) { model.fdaNoticeDismissed = true }
-                        .buttonStyle(.link).controlSize(.small).font(.caption)
-                }
+                Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack {
-                Toggle("在顶部菜单栏显示图标", isOn: $showMenuBarIcon)
-                    .toggleStyle(.checkbox).controlSize(.small).font(.callout)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    // 默认不勾 → 装 X1a0He(生产安全);勾上 → 装自研引擎(实验,可能有兼容问题如视频)。
+                    Toggle(String(localized: "自研引擎（实验）"), isOn: $model.useSelfEngine)
+                        .toggleStyle(.checkbox).controlSize(.small).font(.callout)
+                    Toggle("在顶部菜单栏显示图标", isOn: $showMenuBarIcon)
+                        .toggleStyle(.checkbox).controlSize(.small).font(.callout)
+                }
                 Spacer(minLength: 10)
                 if showActionButton {
                     Button(buttonLabel) {
@@ -125,9 +131,14 @@ struct ContentView: View {
     private var mainButtonDisabled: Bool {
         model.installing || (model.appInstalled && !model.multiOpenActive && !model.cloneMode)
     }
-    // FDA 区(权限行+橙提示)是否显示:克隆模式无探针不显;检测到FDA正常 或 用户手动"已设置"→ 隐藏(整洁)。
+    // 装了引擎(或克隆兜底)才显示完整状态行;没装任何引擎时只留"双开插件状态(不可用)",其余隐藏(整洁)。
+    private var showFullPanel: Bool {
+        model.multiOpenActive || model.cloneMode
+    }
+    // FDA 区(权限行+橙提示)只在注入引擎已装时显示(装前微信不弹"访问其他App",不必提示);
+    // 检测到 FDA 正常则隐藏(整洁)。克隆模式无探针不显。
     private var showFDASection: Bool {
-        !model.cloneMode && !(model.permsFresh && model.fdaOK) && !model.fdaNoticeDismissed
+        model.multiOpenActive && !model.cloneMode && !(model.permsFresh && model.fdaOK)
     }
 
     // 安装按钮色：下载=蓝；引擎过时=橙(醒目引导更新)；已生效=红(卸载)；未装=蓝。

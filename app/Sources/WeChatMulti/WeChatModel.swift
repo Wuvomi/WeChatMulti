@@ -44,9 +44,10 @@ final class WeChatModel: ObservableObject {
     @Published var ourEngineInstalled = false   // 自研引擎是否已装入当前微信
     @Published var installing = false
     @Published var errorMessage: String?   // 仅真报错时弹窗（用户取消密码框不算）
-    /// 用户手动确认"FDA 已设置好"→ 隐藏全盘权限行+橙色提示(保持整洁)。装引擎后cdhash变会重置=重新提示。
-    @Published var fdaNoticeDismissed: Bool = UserDefaults.standard.bool(forKey: "fdaNoticeDismissed") {
-        didSet { UserDefaults.standard.set(fdaNoticeDismissed, forKey: "fdaNoticeDismissed") }
+    /// 是否使用自研引擎(实验)。默认关 → 全新安装走 X1a0He(生产安全,不破坏视频等);
+    /// 勾选 → 走自研引擎(实验性,可能有兼容问题)。
+    @Published var useSelfEngine: Bool = UserDefaults.standard.bool(forKey: "useSelfEngine") {
+        didSet { UserDefaults.standard.set(useSelfEngine, forKey: "useSelfEngine") }
     }
     @Published var updateMessage: String?  // 检测更新结果（弹窗）
     @Published var updateAvailable = false  // 有新版本可一键更新
@@ -221,7 +222,6 @@ final class WeChatModel: ObservableObject {
     /// 注意：已装 X1a0He 时此方法不会被当作"替换"入口（UI 在已装时走 reinstall 同款方案，
     /// 改用自研引擎是独立的次级动作 switchToSelfEngine()，避免误替换用户在用的 X1a0He）。
     func installBestEngine() {
-        fdaNoticeDismissed = false   // 安装会重签微信(cdhash 变)→ FDA 授权失效 → 重新提示
         // 已装某引擎 → 维持同款方案重装，不擅自切换。
         switch activeEngine {
         case .ourOwn:  installSelfEngine(); return
@@ -230,10 +230,8 @@ final class WeChatModel: ObservableObject {
         // .bundleIDClone = 只有克隆在跑、无注入引擎；安装按钮意在装注入引擎 → 当全新安装处理。
         case .none, .bundleIDClone: break
         }
-        // 全新安装的推荐链：旧版微信 → WeChatTweak（最早的静态注入）；新版 → 自研引擎（主）。
-        // （X1a0He 作为手动 fallback，通过独立入口选择，不在自动推荐里。）
-        if let b = build, supportedBuilds.contains(b) { patch() }
-        else { installSelfEngine() }
+        // 全新安装：勾了「自研引擎（实验）」→ 自研引擎；否则 → X1a0He（默认，生产安全、不破坏视频）。
+        if useSelfEngine { installSelfEngine() } else { installX1a0He() }
     }
 
     // MARK: - 版本兼容 / 自动下载替换微信
@@ -797,7 +795,6 @@ final class WeChatModel: ObservableObject {
               FileManager.default.fileExists(atPath: dir + "/uninstall-self-engine.sh") else {
             errorMessage = String(localized: "未找到内置卸载脚本"); return
         }
-        fdaNoticeDismissed = false   // 卸载也重签 → 重新提示 FDA
         let app = appPath
         installing = true
         Task.detached {
