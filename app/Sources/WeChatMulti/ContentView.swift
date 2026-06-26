@@ -22,12 +22,13 @@ struct ContentView: View {
             // 状态 + 权限（合并为一栏，红/绿）
             VStack(spacing: 6) {
                 openedRow
+                plain(String(localized: "双开方案数量"), schemeValue)
                 statusRow
                 plain(model.engineRowLabel, model.engineRowValue)
                 plain(String(localized: "当前微信版本"), versionValue)
                 // 克隆兜底模式无注入探针 → 权限行不适用，隐藏。
                 // 否则：检测到全盘权限正常 → 整行隐藏(精简)；检测不到/未授权 → 显示(fallback)。
-                if !model.cloneMode && !(model.permsReadable && model.fdaOK) {
+                if !model.cloneMode && !(model.permsFresh && model.fdaOK) {
                     fdaRow()
                 }
             }
@@ -40,7 +41,7 @@ struct ContentView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
 
-            if !model.cloneMode && !(model.permsReadable && model.fdaOK) {
+            if !model.cloneMode && !(model.permsFresh && model.fdaOK) {
                 Text("⚠️ 不开微信会反复弹「想访问其他 App 的数据」；若开了仍弹，把微信用「−」删掉再「+」重新添加（macOS 老 bug）。")
                     .font(.caption).foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,6 +126,13 @@ struct ContentView: View {
         if model.needsDownload { return .blue }
         if model.engineOutdated { return .orange }
         return model.multiOpenActive ? .red : .blue
+    }
+
+    // "双开方案数量"右值：共 N 个 · 当前方案 X(只显数量和编号,名字在状态行)。
+    private var schemeValue: String {
+        let n = model.currentSchemeNumber
+        if n == 0 { return String(localized: "共 \(model.totalSchemes) 个 · 暂未启用") }
+        return String(localized: "共 \(model.totalSchemes) 个 · 当前方案 \(n)")
     }
 
     // "已打开的微信"右值：N（已克隆 X 个）。N=在跑实例总数；X=已存在克隆总数。X>0 才显括号。
@@ -236,7 +244,7 @@ struct ContentView: View {
         HStack(spacing: 6) {
             Text("全盘访问权限").font(.callout).foregroundStyle(.secondary)
                 .frame(width: labelW, alignment: .leading)
-            if model.permsReadable && !model.fdaOK {
+            if model.permsFresh && !model.fdaOK {
                 dotSlot(.red)
                 Text("权限未设置").font(.callout).foregroundStyle(Color.red)
             } else {

@@ -157,19 +157,36 @@ final class WeChatModel: ObservableObject {
     /// 隐藏权限行、"已打开的微信"行右侧出"清理全部克隆"。
     var cloneMode: Bool { appInstalled && signType == .appStore }
     var multiOpenActive: Bool { activeEngine != .none }
+
+    /// 双开方案编号(临时状态展示用):①旧版静态注入(WeChatTweak) ②X1a0He ③自研引擎 ④BundleID克隆。
+    let totalSchemes = 4
+    var currentSchemeNumber: Int {
+        switch activeEngine {
+        case .weChatTweak:   return 1
+        case .x1a0he:        return 2
+        case .ourOwn:        return 3
+        case .bundleIDClone: return 4
+        case .none:          return 0
+        }
+    }
     let x1a0heVersion = "2.4.7"   // 内置 X1a0He pkg 版本
     let selfEngineVersion = "0.9.2"   // 自研引擎当前版本(与引擎 .m 的 @"engine" 对齐;有实质改动就同步 bump)
 
     /// 已装引擎写在 perms.json 里的版本(旧引擎无此字段 → nil)。
     @Published var installedEngineVersion: String?
-    private var permsUpdated: TimeInterval?   // perms.json 的 updated 时间戳；判断数据是否"新鲜"(微信正带引擎在跑)
+    private var permsUpdated: TimeInterval?   // perms.json 的 updated 时间戳
+    private var permsPid: Int?                // 写 perms.json 的进程 pid；用它是否活着判断数据是否"新鲜"
+    /// perms.json 是否来自当前还活着的微信进程(安装引擎会杀微信→旧 perms 的 pid 已死→不新鲜)。
+    var permsFresh: Bool {
+        guard let pid = permsPid, pid > 0 else { return false }
+        return kill(pid_t(pid), 0) == 0   // 进程存活
+    }
     /// 引擎过时:已装自研引擎,但其版本缺失或低于当前 → 需更新(GUI 显"引擎需更新"+引导重装)。
     var engineOutdated: Bool {
         guard ourEngineInstalled, permsReadable else { return false }  // perms 没读到=未知,不误判
         // perms.json 必须"新鲜"(微信正带引擎在跑、近 3 分钟内写过)才据此判过时。
         // 否则(微信没跑/刚装完已退出)读到的是上个引擎的旧 perms，会误报"引擎需更新"。
-        guard let upd = permsUpdated,
-              Date().timeIntervalSince1970 - upd < 180 else { return false }
+        guard permsFresh else { return false }   // perms 来自已死进程(刚装完杀了微信)→ 旧数据,不据此判过时
         guard let v = installedEngineVersion else { return true }       // 新鲜数据里无 engine 字段=旧引擎
         return v.compare(selfEngineVersion, options: .numeric) == .orderedAscending
     }
@@ -510,6 +527,7 @@ final class WeChatModel: ObservableObject {
         screenOK = (obj["screen"] as? Bool) ?? false
         installedEngineVersion = obj["engine"] as? String   // 旧引擎无此字段 → nil → 判过时
         permsUpdated = obj["updated"] as? TimeInterval       // 数据新鲜度
+        permsPid = obj["pid"] as? Int                        // 写入进程,用其存活判新鲜
     }
 
     private func readVersion() {

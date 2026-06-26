@@ -16,6 +16,9 @@
 
 /* Main window — status rows */
 "已打开的微信" = "Open WeChats";
+"双开方案数量" = "Schemes";
+"共 %lld 个 · 当前方案 %lld" = "%1$lld total · current #%2$lld";
+"共 %lld 个 · 暂未启用" = "%lld total · none active";
 "%lld 个" = "%lld";
 "双开插件状态" = "Multi-instance";
 "已可用（%@ 方案）" = "Ready (%@)";
